@@ -410,7 +410,38 @@
       "proxied": true,
       "ttl": "Auto"
     },
-    "dnsOAuthPermission": false
+    "dnsOAuthPermission": false,
+    "latestTroubleshooting": {
+      "checkedAt": "2026-10-11T18:19:07.573Z",
+      "status": "pending",
+      "verification": {
+        "status": "pending",
+        "error_message": "CNAME record not set"
+      },
+      "validation": {
+        "status": "pending",
+        "method": "http"
+      },
+      "validationRetry": "HTTP 200 accepted; domain remains pending",
+      "dnsRecordRead": "403; underlying record target cannot be inspected with current OAuth permissions",
+      "probes": [
+        {
+          "origin": "https://ranterra.pages.dev",
+          "status": 200,
+          "ray": "a48fdf0b593e567f-CDG"
+        },
+        {
+          "origin": "https://ranterra.davidkh.com",
+          "status": 522,
+          "ray": "a48fdf0bba0c7033-CDG"
+        },
+        {
+          "origin": "https://davidkh.com",
+          "status": 200,
+          "ray": "a48fdf0c2dea7808-CDG"
+        }
+      ]
+    }
   },
   "visualVerification": {
     "origin": "https://ranterra.pages.dev",
