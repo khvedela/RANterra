@@ -150,6 +150,9 @@ export function ResearchModal(props: ModalProps) {
     <Modal
       {...props}
       destroyOnHidden
+      // Keep command hit targets stationary from the first visible frame.
+      transitionName=""
+      maskTransitionName=""
       modalRender={(content) => (
         <div onKeyDownCapture={containTab}>{content}</div>
       )}

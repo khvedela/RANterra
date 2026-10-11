@@ -271,6 +271,9 @@ test("configurable service, checkpoint persistence, import replay and comparison
   expect(artifact.scenario.version).toBe(2);
   await page.reload();
   await page.getByRole("button", { name: "Results", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Experiment results", exact: true }),
+  ).toHaveCSS("transform", "none");
   await page
     .getByRole("button", { name: "Restore saved run", exact: true })
     .click();
