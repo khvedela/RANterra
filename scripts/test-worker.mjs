@@ -91,9 +91,25 @@ if (!isMainThread) {
       (m) =>
         m.type === "snapshot" && m.snapshot.started && m.snapshot.pending === 0,
     );
-    assert.equal(finished.snapshot.ues[0].state, "RegistrationRejected");
+    assert.equal(finished.snapshot.ues[0].state, "Registered");
     assert.equal(finished.running, false);
     const events = finished.snapshot.events;
+    const id = scenario.ues[0].id;
+    post({ type: "session", id, action: "establish", loss: 0, revision: 1 });
+    await wait((m) => m.revision === 1 && m.snapshot?.sessions[0]?.active);
+    post({ type: "session", id, action: "echo", loss: 0, revision: 1 });
+    post({ type: "play", revision: 1 });
+    await wait(
+      (m) => m.revision === 1 && m.snapshot?.sessions[0]?.delivered === 1,
+    );
+    post({ type: "session", id, action: "release", loss: 0, revision: 1 });
+    await wait(
+      (m) =>
+        m.revision === 1 &&
+        m.snapshot?.sessions[0] &&
+        !m.snapshot.sessions[0].active,
+    );
+
     post({ type: "load", scenario, revision: 2 });
     await wait((m) => m.type === "snapshot" && m.revision === 2);
     post({ type: "play", revision: 1 }); // stale command must do nothing
@@ -108,6 +124,48 @@ if (!isMainThread) {
     post({ type: "load", scenario: { ...scenario, version: 99 }, revision: 3 });
     const invalid = await wait((m) => m.type === "error" && m.revision === 3);
     assert.match(invalid.message, /version/);
+    if (process.argv.includes("--benchmark")) {
+      const bounded = JSON.parse(await readFile("examples/paris.json", "utf8"));
+      bounded.radio = { model: "UMa" };
+      const g = bounded.gnodebs[0],
+        u = bounded.ues[0];
+      bounded.gnodebs = Array.from({ length: 16 }, (_, i) => ({
+        ...g,
+        id: i + 1,
+        height_m: 25,
+        lon: g.lon + (i % 4) * 0.001,
+        lat: g.lat + Math.floor(i / 4) * 0.001,
+      }));
+      bounded.ues = Array.from({ length: 128 }, (_, i) => ({
+        ...u,
+        id: i + 101,
+        lon: u.lon + (i % 16) * 0.0001,
+        lat: u.lat + Math.floor(i / 16) * 0.0001,
+      }));
+      const elapsed = [];
+      for (let i = 10; i < 20; i++) {
+        const start = performance.now();
+        post({ type: "load", scenario: bounded, revision: i });
+        const reply = await wait(
+          (m) => m.type === "snapshot" && m.revision === i,
+        );
+        assert.equal(reply.snapshot.ues.length, 128);
+        elapsed.push(performance.now() - start);
+        messages.length = 0;
+      }
+      elapsed.sort((a, b) => a - b);
+      console.log(
+        JSON.stringify({
+          worker_load_roundtrip_median_ms: elapsed[5],
+          worker_load_roundtrip_max_ms: elapsed[9],
+          runs: 10,
+          cells: 16,
+          ues: 128,
+          buildings: bounded.buildings.length,
+          node_process_rss_bytes: process.memoryUsage().rss,
+        }),
+      );
+    }
     console.log(
       "Production worker passed: offline WASM loading, step, pause/resume, reset, deterministic replay, stale-command isolation, transactional invalid-load rejection.",
     );

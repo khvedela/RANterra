@@ -8,8 +8,17 @@ export interface Gnodeb {
   tx_power_dbm: number;
   height_m: number;
   gain_dbi: number;
+  antenna?: {
+    sector: boolean;
+    azimuth_deg: number;
+    downtilt_deg: number;
+    resource_blocks: number;
+    numerology: number;
+  };
 }
 export interface Ue {
+  fault?: string;
+  mobility?: { waypoints: Point[]; speed_mps: number };
   id: number;
   name: string;
   lon: number;
@@ -21,6 +30,14 @@ export interface Building {
 }
 export interface Scenario {
   version: 1;
+  radio?: {
+    model: "Legacy" | "UMi" | "UMa";
+    shadow_fading: boolean;
+    coverage_dbm: number;
+    hysteresis_db: number;
+    time_to_trigger_ms: number;
+    duration_ms: number;
+  };
   name: string;
   seed: number;
   center: Point;
@@ -33,6 +50,10 @@ export interface UeStatus {
   state: string;
   serving_cell: number | null;
   rsrp: number | null;
+  position: Point;
+  sinr_db: number | null;
+  failure: string | null;
+  registration_latency_ms: number | null;
 }
 export interface NetworkEvent {
   id: number;
@@ -59,11 +80,32 @@ export interface Snapshot {
   amf: Record<string, string>;
   events: NetworkEvent[];
   coverage: Sample[];
+  event_limit_reached: boolean;
+  sessions: {
+    ue_id: number;
+    id: number;
+    ip: number[];
+    active: boolean;
+    dnn: string;
+    sst: number;
+    sent: number;
+    delivered: number;
+    dropped: number;
+    last_rtt_ms: number | null;
+  }[];
 }
 export type WorkerCommand =
+  | {
+      type: "session";
+      id: number;
+      action: "establish" | "release" | "echo" | "deregister";
+      loss: number;
+      revision: number;
+    }
+  | { type: "speed"; speed: number; revision: number }
   | { type: "load"; scenario: Scenario; revision: number }
   | { type: "play" | "pause" | "step"; revision: number };
 export type WorkerResponse =
   | { type: "snapshot"; snapshot: Snapshot; running: boolean; revision: number }
   | { type: "error"; message: string; revision: number };
-export type ToolMode = "select" | "gnodeb" | "ue" | "move";
+export type ToolMode = "select" | "gnodeb" | "ue" | "move" | "trajectory";

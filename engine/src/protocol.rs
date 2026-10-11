@@ -24,7 +24,7 @@ pub fn registration_request(id: u32) -> std::result::Result<Vec<u8>, String> {
             .with_ngksi(7),
         identity,
     )
-    .set_ue_security_capability(NasUeSecurityCapability::from_capabilities(0xe0, 0xe0));
+    .set_ue_security_capability(NasUeSecurityCapability::from_capabilities(0xa0, 0x20));
     let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationRequest(request));
     if !message.validate().is_empty() {
         return Err(format!("NAS validation: {:?}", message.validate()));
@@ -46,6 +46,16 @@ pub fn inspect(bytes: &[u8]) -> std::result::Result<(String, String), String> {
     let kind = match &message {
         Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(_)) => "Registration Request",
         Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(_)) => "Registration Reject",
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::AuthenticationRequest(_)) => "Authentication Request",
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::AuthenticationResponse(_)) => {
+            "Authentication Response"
+        }
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::AuthenticationFailure(_)) => "Authentication Failure",
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::AuthenticationReject(_)) => "Authentication Reject",
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::SecurityModeCommand(_)) => "Security Mode Command",
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::SecurityModeComplete(_)) => "Security Mode Complete",
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(_)) => "Registration Accept",
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationComplete(_)) => "Registration Complete",
         _ => return Err("Unsupported NAS message in this procedure".into()),
     };
     Ok((kind.into(), message.to_string()))

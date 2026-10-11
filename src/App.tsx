@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import NetworkMap from "./NetworkMap";
 import { demo } from "./defaults";
-import { loadScenario, saveScenario } from "./storage";
+import { loadScenario, saveScenario, saveNamed, listNamed } from "./storage";
 import { fetchBuildings, searchPlaces, type Place } from "./geography";
 import type {
   Building,
@@ -57,6 +57,7 @@ function prettyState(s?: string) {
   return s?.replace(/([a-z])([A-Z])/g, "$1 $2") ?? "Idle";
 }
 export default function App() {
+  const [workerEpoch, setWorkerEpoch] = useState(0);
   const [scenario, setScenario] = useState<Scenario>(demo),
     [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [running, setRunning] = useState(false),
@@ -86,6 +87,80 @@ export default function App() {
   const gnodeb = scenario.gnodebs.find((g) => g.id === selected),
     ue = scenario.ues.find((u) => u.id === selected),
     entity = gnodeb ?? ue;
+  const session = snapshot?.sessions.find((s) => s.ue_id === selected);
+  const [speed, setSpeed] = useState(0.1);
+  const [library, setLibrary] = useState<Scenario[]>([]);
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [baseline, setBaseline] = useState<{
+    registered: number;
+    latency: number | null;
+  } | null>(null);
+  const [ueFilter, setUeFilter] = useState("all");
+  const radio = scenario.radio ?? {
+    model: "Legacy" as const,
+    shadow_fading: false,
+    coverage_dbm: -120,
+    hysteresis_db: 3,
+    time_to_trigger_ms: 320,
+    duration_ms: 10000,
+  };
+  const registered =
+    snapshot?.ues.filter((u) => u.state === "Registered").length ?? 0;
+  const failed =
+    snapshot?.ues.filter((u) => u.state === "RegistrationRejected").length ?? 0;
+  const latencies =
+    snapshot?.ues.flatMap((u) =>
+      u.registration_latency_ms === null ? [] : [u.registration_latency_ms],
+    ) ?? [];
+  const latency = latencies.length
+    ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+    : null;
+  function metricsCSV() {
+    const rows = [
+      "ue_id,state,cell_id,rsrp_dbm,sinr_db,registration_latency_virtual_ms",
+      ...(snapshot?.ues ?? []).map((u) =>
+        [
+          u.id,
+          u.state,
+          u.serving_cell,
+          u.rsrp,
+          u.sinr_db,
+          u.registration_latency_ms,
+        ].join(","),
+      ),
+    ];
+    const url = URL.createObjectURL(
+      new Blob([rows.join("\n")], { type: "text/csv" }),
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ranterra-metrics.csv";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function saveCopy() {
+    try {
+      const copy = { ...scenario, name: scenario.name.slice(0, 110) + " copy" };
+      await saveNamed(copy);
+      setLibrary(await listNamed());
+      setNotice("Scenario copy saved in the local library.");
+    } catch (e) {
+      setNotice(String(e));
+    }
+  }
+
+  function sessionAction(
+    action: "establish" | "release" | "echo" | "deregister",
+  ) {
+    if (selected)
+      worker.current?.postMessage({
+        type: "session",
+        id: selected,
+        action,
+        loss: 0,
+        revision: activeRevision.current,
+      } satisfies WorkerCommand);
+  }
   const ueStatus = snapshot?.ues.find((u) => u.id === selected);
   function command(type: "play" | "pause" | "step") {
     worker.current?.postMessage({
@@ -123,8 +198,20 @@ export default function App() {
         revision.current = activeRevision.current;
         return;
       }
+      const sameRevision = activeRevision.current === data.revision;
       activeRevision.current = data.revision;
-      setSnapshot(data.snapshot);
+      setSnapshot((prev) =>
+        sameRevision && prev
+          ? {
+              ...data.snapshot,
+              coverage: prev.coverage,
+              ues:
+                JSON.stringify(prev.ues) === JSON.stringify(data.snapshot.ues)
+                  ? prev.ues
+                  : data.snapshot.ues,
+            }
+          : data.snapshot,
+      );
       setRunning(data.running);
       setPending(false);
       if (candidate.current) {
@@ -144,7 +231,7 @@ export default function App() {
     };
     w.onerror = (e) => {
       setError(
-        `WASM worker failed: ${e.message}. Rebuild WASM and reload; no fallback engine is used.`,
+        `WASM worker failed: ${e.message}. Use Recover worker to restart from the saved scenario.`,
       );
       setRunning(false);
       setPending(false);
@@ -169,7 +256,7 @@ export default function App() {
       cancelled = true;
       w.terminate();
     };
-  }, []);
+  }, [workerEpoch]);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(""), 7000);
@@ -191,6 +278,23 @@ export default function App() {
     if (mode === "move" && selected) {
       move(selected, p);
       setMode("select");
+      return;
+    }
+    if (mode === "trajectory" && selected) {
+      apply({
+        ...scenario,
+        ues: scenario.ues.map((u) =>
+          u.id === selected
+            ? {
+                ...u,
+                mobility: {
+                  speed_mps: u.mobility?.speed_mps || 1.4,
+                  waypoints: [...(u.mobility?.waypoints ?? []), p],
+                },
+              }
+            : u,
+        ),
+      });
       return;
     }
     if (mode !== "gnodeb" && mode !== "ue") return;
@@ -219,7 +323,7 @@ export default function App() {
             lat: p[1],
             frequency_mhz: 3500,
             tx_power_dbm: 46,
-            height_m: 25,
+            height_m: radio.model === "UMi" ? 10 : 25,
             gain_dbi: 16,
           },
         ],
@@ -318,7 +422,9 @@ export default function App() {
     }
   }
   const events = (snapshot?.events ?? []).filter(
-    (e) => eventFilter === "all" || e.layer === eventFilter,
+    (e) =>
+      (eventFilter === "all" || e.layer === eventFilter) &&
+      (ueFilter === "all" || e.ue_id === Number(ueFilter)),
   );
   const selectedEvent = events.find((e) => e.id === eventId) ?? events.at(-1);
   const completed = snapshot?.started && snapshot.pending === 0;
@@ -384,6 +490,28 @@ export default function App() {
                 ? "Computing…"
                 : "Local workspace"}
           </span>
+          <button onClick={() => setResultsOpen(true)}>Results</button>
+          <button onClick={() => void saveCopy()}>Save copy</button>
+          <select
+            aria-label="Saved scenarios"
+            value=""
+            onFocus={() => {
+              void listNamed()
+                .then(setLibrary)
+                .catch((e) => setNotice(String(e)));
+            }}
+            onChange={(e) => {
+              const saved = library[Number(e.target.value)];
+              if (saved) apply(saved);
+            }}
+          >
+            <option value="">Saved scenarios</option>
+            {library.map((s, i) => (
+              <option key={i} value={i}>
+                {s.name}
+              </option>
+            ))}
+          </select>
           <button onClick={() => file.current?.click()}>
             <ArrowUpFromLine size={15} /> Import
           </button>
@@ -453,6 +581,59 @@ export default function App() {
                 ))}
               </div>
             )}
+            <label>
+              RF model{" "}
+              <select
+                aria-label="RF model"
+                value={radio.model}
+                onChange={(e) => {
+                  const model = e.target.value as typeof radio.model;
+                  apply({
+                    ...scenario,
+                    radio: { ...radio, model },
+                    gnodebs: scenario.gnodebs.map((g) => ({
+                      ...g,
+                      height_m: model === "UMi" ? 10 : 25,
+                    })),
+                  });
+                }}
+              >
+                {["Legacy", "UMi", "UMa"].map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={radio.shadow_fading}
+                onChange={(e) =>
+                  apply({
+                    ...scenario,
+                    radio: { ...radio, shadow_fading: e.target.checked },
+                  })
+                }
+              />{" "}
+              Seeded shadow fading
+            </label>
+            <label>
+              Duration (virtual s){" "}
+              <input
+                aria-label="Experiment duration"
+                type="number"
+                min={1}
+                max={3600}
+                value={radio.duration_ms / 1000}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (n >= 1 && n <= 3600)
+                    apply({
+                      ...scenario,
+                      radio: { ...radio, duration_ms: n * 1000 },
+                    });
+                }}
+              />
+            </label>
             <div className="area-meta">
               <span>Center</span>
               <span>
@@ -691,16 +872,61 @@ export default function App() {
                 }}
               />
             </label>
-            <span className="speed">0.1× playback</span>
+            <label className="speed">
+              Playback{" "}
+              <select
+                aria-label="Simulation speed"
+                value={speed}
+                onChange={(e) => {
+                  const speed = Number(e.target.value);
+                  setSpeed(speed);
+                  worker.current?.postMessage({
+                    type: "speed",
+                    speed,
+                    revision: activeRevision.current,
+                  } satisfies WorkerCommand);
+                }}
+              >
+                {[0.1, 1, 5, 10].map((s) => (
+                  <option key={s} value={s}>
+                    {s}×
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <section className="timeline">
             <div className="timeline-heading">
               <h2>
                 <Activity size={16} /> Protocol timeline{" "}
-                <span>{snapshot?.events.length ?? 0}</span>
+                <span>
+                  {snapshot?.events.length ?? 0}
+                  {events.length > 500 ? " · latest 500 shown" : ""}
+                </span>
               </h2>
               <div className="timeline-filters">
-                {["all", "NAS", "NGAP", "RADIO"].map((f) => (
+                <select
+                  aria-label="Filter timeline by UE"
+                  value={ueFilter}
+                  onChange={(e) => setUeFilter(e.target.value)}
+                >
+                  <option value="all">All UEs</option>
+                  {scenario.ues.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+                {[
+                  "all",
+                  "NAS",
+                  "NGAP",
+                  "5GSM",
+                  "GTP-U",
+                  "IPv4",
+                  "RADIO",
+                  "STATE",
+                ].map((f) => (
                   <button
                     className={eventFilter === f ? "active" : ""}
                     key={f}
@@ -734,7 +960,7 @@ export default function App() {
                     <small>UE → gNodeB → AMF → gNodeB → UE</small>
                   </div>
                 ) : (
-                  events.map((e) => (
+                  events.slice(-500).map((e) => (
                     <button
                       className={`event-row ${selectedEvent?.id === e.id ? "active" : ""}`}
                       key={e.id}
@@ -831,11 +1057,77 @@ export default function App() {
                       max={40}
                       onChange={(v) => updateRadio("gain_dbi", v)}
                     />
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={gnodeb.antenna?.sector ?? false}
+                        onChange={(e) =>
+                          apply({
+                            ...scenario,
+                            gnodebs: scenario.gnodebs.map((g) =>
+                              g.id === selected
+                                ? {
+                                    ...g,
+                                    antenna: {
+                                      sector: e.target.checked,
+                                      azimuth_deg: g.antenna?.azimuth_deg ?? 0,
+                                      downtilt_deg:
+                                        g.antenna?.downtilt_deg ?? 0,
+                                      resource_blocks:
+                                        g.antenna?.resource_blocks ?? 106,
+                                      numerology: g.antenna?.numerology ?? 1,
+                                    },
+                                  }
+                                : g,
+                            ),
+                          })
+                        }
+                      />{" "}
+                      Sector antenna
+                    </label>
+                    {(
+                      [
+                        ["azimuth_deg", "Azimuth", 0, 360, 0],
+                        ["downtilt_deg", "Downtilt", -20, 90, 0],
+                        ["resource_blocks", "Resource blocks", 1, 275, 106],
+                        ["numerology", "Numerology", 0, 4, 1],
+                      ] as const
+                    ).map(([key, label, min, max, fallback]) => (
+                      <RadioField
+                        key={`${gnodeb.id}-${key}`}
+                        label={label}
+                        unit=""
+                        min={min}
+                        max={max}
+                        value={gnodeb.antenna?.[key] ?? fallback}
+                        onChange={(value) =>
+                          apply({
+                            ...scenario,
+                            gnodebs: scenario.gnodebs.map((g) =>
+                              g.id === selected
+                                ? {
+                                    ...g,
+                                    antenna: {
+                                      sector: false,
+                                      azimuth_deg: 0,
+                                      downtilt_deg: 0,
+                                      resource_blocks: 106,
+                                      numerology: 1,
+                                      ...g.antenna,
+                                      [key]: value,
+                                    },
+                                  }
+                                : g,
+                            ),
+                          })
+                        }
+                      />
+                    ))}
                     <div className="radio-footnote">
                       <Info size={13} />
                       <span>
-                        Omnidirectional approximation. Fixed 106 RB power
-                        allocation.
+                        Per-resource-element power proxy. Configure antenna and
+                        resource allocation below.
                       </span>
                     </div>
                   </>
@@ -855,8 +1147,16 @@ export default function App() {
                       </strong>
                     </div>
                     <div className="detail-row">
+                      <span>SINR</span>
+                      <strong>{ueStatus?.sinr_db?.toFixed(1) ?? "—"} dB</strong>
+                    </div>
+                    <div className="detail-row">
                       <span>Registration</span>
-                      <strong>Not registered</strong>
+                      <strong>
+                        {ueStatus?.state === "Registered"
+                          ? "REGISTERED · NIA2 / NEA2"
+                          : prettyState(ueStatus?.state)}
+                      </strong>
                     </div>
                     <div className="detail-row">
                       <span>AMF context</span>
@@ -864,9 +1164,132 @@ export default function App() {
                         {snapshot?.amf[entity.id] ?? "Not created"}
                       </strong>
                     </div>
+                    {ueStatus?.failure && (
+                      <p role="status">{ueStatus.failure}</p>
+                    )}
+                    <div className="detail-row">
+                      <span>Registration latency</span>
+                      <strong>
+                        {ueStatus?.registration_latency_ms ?? "—"} ms virtual
+                      </strong>
+                    </div>
+                    <div className="detail-row">
+                      <span>PDU session</span>
+                      <strong>
+                        {session?.active ? session.ip.join(".") : "Inactive"}
+                      </strong>
+                    </div>
+                    <div className="detail-row">
+                      <span>Echo delivered / dropped</span>
+                      <strong>
+                        {session?.delivered ?? 0} / {session?.dropped ?? 0}
+                      </strong>
+                    </div>
+                    <div className="detail-row">
+                      <span>Last echo RTT</span>
+                      <strong>{session?.last_rtt_ms ?? "—"} ms virtual</strong>
+                    </div>
+                    <button
+                      disabled={
+                        ueStatus?.state !== "Registered" || !!session?.active
+                      }
+                      onClick={() => sessionAction("establish")}
+                    >
+                      Establish PDU session
+                    </button>
+                    <button
+                      disabled={!session?.active}
+                      onClick={() => {
+                        sessionAction("echo");
+                        command("play");
+                      }}
+                    >
+                      Send echo
+                    </button>
+                    <button
+                      disabled={!session?.active}
+                      onClick={() => sessionAction("release")}
+                    >
+                      Release session
+                    </button>
+                    <button
+                      disabled={ueStatus?.state !== "Registered"}
+                      onClick={() => sessionAction("deregister")}
+                    >
+                      Deregister UE
+                    </button>
+                    <button
+                      onClick={() =>
+                        setMode(mode === "trajectory" ? "select" : "trajectory")
+                      }
+                    >
+                      {mode === "trajectory"
+                        ? "Finish trajectory"
+                        : "Draw trajectory"}
+                    </button>
+                    <label>
+                      Speed (m/s)
+                      <input
+                        aria-label="UE velocity"
+                        type="number"
+                        min={0}
+                        max={100}
+                        defaultValue={ue?.mobility?.speed_mps ?? 0}
+                        key={`speed-${ue?.id}`}
+                        onBlur={(e) => {
+                          const speed = Number(e.target.value);
+                          if (speed >= 0 && speed <= 100)
+                            apply({
+                              ...scenario,
+                              ues: scenario.ues.map((u) =>
+                                u.id === selected
+                                  ? {
+                                      ...u,
+                                      mobility: {
+                                        waypoints: u.mobility?.waypoints ?? [],
+                                        speed_mps: speed,
+                                      },
+                                    }
+                                  : u,
+                              ),
+                            });
+                        }}
+                      />
+                    </label>
+                    <label>
+                      Laboratory fault
+                      <select
+                        aria-label="Laboratory fault"
+                        value={ue?.fault ?? "None"}
+                        onChange={(e) =>
+                          apply({
+                            ...scenario,
+                            ues: scenario.ues.map((u) =>
+                              u.id === selected
+                                ? { ...u, fault: e.target.value }
+                                : u,
+                            ),
+                          })
+                        }
+                      >
+                        {[
+                          "None",
+                          "UnknownSubscriber",
+                          "InvalidCredentials",
+                          "InvalidAutn",
+                          "IncorrectResponse",
+                          "InvalidMac",
+                          "InvalidCounter",
+                          "Timeout",
+                        ].map((f) => (
+                          <option key={f}>{f}</option>
+                        ))}
+                      </select>
+                    </label>
                     <p className="hint">
                       Cell selection uses strongest estimated RSRP above −120
-                      dBm. No handover procedure is simulated.
+                      dBm by default. Mobility uses 100 ms ticks and A3-style
+                      reassociation. Protocol handover is unsupported.
                     </p>
                   </>
                 )}
@@ -965,7 +1388,13 @@ export default function App() {
                     </div>
                     <div className="detail-row">
                       <span>Registered UEs</span>
-                      <strong>0</strong>
+                      <strong>
+                        {snapshot?.ues.filter(
+                          (u) =>
+                            u.serving_cell === gnodeb.id &&
+                            u.state === "Registered",
+                        ).length ?? 0}
+                      </strong>
                     </div>
                     <div className="detail-row">
                       <span>Core network</span>
@@ -978,8 +1407,9 @@ export default function App() {
                   <div className="protocol-note">
                     <ShieldAlert size={17} />
                     <span>
-                      Registration is deliberately rejected. Authentication and
-                      security are not implemented.
+                      Synthetic laboratory subscribers only. MILENAGE 5G-AKA,
+                      NIA2 integrity and NEA2 ciphering. Never import real
+                      credentials.
                     </span>
                   </div>
                 )}
@@ -1029,7 +1459,7 @@ export default function App() {
           OxiRush NAS + NGAP <span className="muted">/</span> Approximate RF{" "}
           <span className="muted">/</span>
           <button onClick={() => setModelOpen(true)}>
-            MVP v0.1 <Info size={11} />
+            v1.0 candidate <Info size={11} />
           </button>
         </span>
       </footer>
@@ -1037,9 +1467,112 @@ export default function App() {
         <div className="error-banner" role="alert">
           <ShieldAlert size={20} />
           <span>{error}</span>
+          <button
+            onClick={() => {
+              setError("");
+              setPending(true);
+              setWorkerEpoch((n) => n + 1);
+            }}
+          >
+            Recover worker
+          </button>
           <button onClick={() => apply(structuredClone(demo))}>
             Reset to demo
           </button>
+        </div>
+      )}
+      {snapshot?.event_limit_reached && (
+        <div role="status" className="toast">
+          Trace limit reached (16,384 events). Reset before recording more
+          events; computation continues.
+        </div>
+      )}
+      {resultsOpen && (
+        <div className="modal-scrim" onClick={() => setResultsOpen(false)}>
+          <section
+            className="model-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Experiment results"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              aria-label="Close results"
+              className="modal-close"
+              onClick={() => setResultsOpen(false)}
+            >
+              <X />
+            </button>
+            <h2>Experiment results</h2>
+            <p>
+              {scenario.name} · Seed {scenario.seed} · RF {radio.model} ·{" "}
+              {(snapshot?.time_ms ?? 0) / 1000} s virtual time
+            </p>
+            <dl>
+              <dt>Registered / rejected / total UEs</dt>
+              <dd>
+                {registered} / {failed} / {scenario.ues.length}
+              </dd>
+              <dt>Registration success (all deployed UEs)</dt>
+              <dd>
+                {scenario.ues.length
+                  ? ((100 * latencies.length) / scenario.ues.length).toFixed(1)
+                  : "—"}
+                %
+              </dd>
+              <dt>Mean successful registration latency</dt>
+              <dd>{latency?.toFixed(1) ?? "—"} ms virtual</dd>
+              <dt>Active PDU sessions</dt>
+              <dd>{snapshot?.sessions.filter((s) => s.active).length ?? 0}</dd>
+              <dt>Echo delivered / dropped</dt>
+              <dd>
+                {snapshot?.sessions.reduce((n, s) => n + s.delivered, 0) ?? 0} /{" "}
+                {snapshot?.sessions.reduce((n, s) => n + s.dropped, 0) ?? 0}
+              </dd>
+            </dl>
+            <table>
+              <thead>
+                <tr>
+                  <th>Cell</th>
+                  <th>Associated UEs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scenario.gnodebs.map((g) => (
+                  <tr key={g.id}>
+                    <td>{g.name}</td>
+                    <td>
+                      {snapshot?.ues.filter((u) => u.serving_cell === g.id)
+                        .length ?? 0}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p>
+              Protocol handovers: unsupported. SINR uses full-load co-channel
+              interference; RSRP is a power-allocation proxy. Session control is
+              atomic at current virtual time.
+            </p>
+            {baseline && (
+              <p>
+                Prior comparison: {baseline.registered} registered;{" "}
+                {baseline.latency?.toFixed(1) ?? "—"} ms mean registration
+                latency.
+              </p>
+            )}
+            <button onClick={() => setBaseline({ registered, latency })}>
+              Keep comparison
+            </button>
+            <button onClick={metricsCSV}>Export metrics CSV</button>
+            <button
+              onClick={() =>
+                download("ranterra-results.json", { scenario, snapshot })
+              }
+            >
+              Export results JSON
+            </button>
+          </section>
         </div>
       )}
       {notice && (
@@ -1076,30 +1609,34 @@ export default function App() {
             </p>
             <h3>Radio propagation</h3>
             <code>
-              PL = 32.4 + 20 log₁₀(f GHz) + 30 log₁₀(d metres)
+              Selected model: {radio.model} · TR 38.901 v18.0.0 subset or legacy
+              log-distance
               <br />
               RSRP ≈ Ptx + gain − 10 log₁₀(12 × 106) − PL − Lbuildings
             </code>
             <p>
-              Close-in log-distance model, exponent 3.0; 3D distance with UE
-              height 1.5 m. Fixed 106 resource blocks; no interference, fading,
-              terrain, beamforming, scheduling or calibrated antenna pattern.
-              Frequencies outside sub-6 GHz are experimental extrapolations.
+              UMi and UMa use LOS/NLOS path loss with 1.5 m UE height, 10–5000 m
+              horizontal distance and 0.5–100 GHz carrier. UMi requires 10 m
+              antennas, UMa 25 m. Outside that range the research model reports
+              no usable coverage. Shadow fading is seeded but not spatially
+              correlated. No terrain, diffraction, fast fading or PHY
+              scheduling.
             </p>
             <h3>Buildings are a coarse proxy</h3>
             <p>
-              Each intersected OSM footprint adds 12 dB, capped at 36 dB. Only
-              closed simple ways are loaded, up to 600 buildings. Heights,
-              materials, holes and multipolygon relations are not modeled.
-              Missing buildings mean no obstruction loss.
+              In UMi/UMa, footprint intersections select NLOS; missing geometry
+              assumes LOS. Legacy mode adds 12 dB per footprint, capped at 36
+              dB. Only closed simple ways are loaded, up to 600 buildings.
+              Heights, materials, holes and multipolygon relations are not
+              modeled. Missing buildings mean no obstruction loss.
             </p>
-            <h3>Real messages. Deliberately incomplete registration.</h3>
+            <h3>Authenticated laboratory registration</h3>
             <p>
-              UE → NAS Registration Request → NGAP Initial UE Message → AMF →
-              Registration Reject (cause 7) → NGAP Downlink NAS Transport → UE.
-              The AMF uses a lab reject policy. No authentication, NAS security,
-              Registration Accept, PDU session, RRC, NG setup, SCTP or user
-              plane is implemented.
+              Registration Request → 5G-AKA Authentication → Security Mode →
+              Registration Accept / Complete. Separate UE and AMF NAS security
+              contexts enforce NIA2 and NEA2. Public deterministic synthetic
+              credentials and null-scheme SUCI are for laboratory use only. RRC,
+              NG setup and native SCTP remain unsupported.
             </p>
             <h3>Local and reproducible</h3>
             <p>

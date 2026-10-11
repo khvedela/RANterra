@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Gnodeb {
     pub id: u32,
     pub name: String,
@@ -11,22 +12,33 @@ pub struct Gnodeb {
     pub tx_power_dbm: f64,
     pub height_m: f64,
     pub gain_dbi: f64,
+    #[serde(default)]
+    pub antenna: Antenna,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Ue {
+    #[serde(default)]
+    pub fault: LabFault,
+    #[serde(default)]
+    pub mobility: Mobility,
     pub id: u32,
     pub name: String,
     pub lon: f64,
     pub lat: f64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Building {
     pub id: String,
     pub ring: Vec<[f64; 2]>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Scenario {
     pub version: u32,
+    #[serde(default)]
+    pub radio: RadioConfig,
     pub name: String,
     pub seed: u32,
     pub center: [f64; 2],
@@ -48,8 +60,33 @@ impl Scenario {
         if self.gnodebs.len() > 16 || self.ues.len() > 128 || self.buildings.len() > 600 {
             return Err("Scenario exceeds limits: 16 cells, 128 UEs, 600 buildings".into());
         }
+        self.radio.validate()?;
         let mut ids = BTreeSet::new();
         for g in &self.gnodebs {
+            if !(0.0..=360.0).contains(&g.antenna.azimuth_deg)
+                || !(-20.0..=90.0).contains(&g.antenna.downtilt_deg)
+                || !(1..=275).contains(&g.antenna.resource_blocks)
+                || g.antenna.numerology > 4
+            {
+                return Err("Invalid antenna configuration".into());
+            }
+            if self.radio.model != RadioKind::Legacy
+                && (!(500.0..=100000.0).contains(&g.frequency_mhz)
+                    || (g.height_m
+                        - if self.radio.model == RadioKind::UMi {
+                            10.0
+                        } else {
+                            25.0
+                        })
+                    .abs()
+                        > 0.01)
+            {
+                return Err(
+                    "TR 38.901 profile requires 0.5–100 GHz and UMi height 10 m / UMa height 25 m"
+                        .into(),
+                );
+            }
+
             if !ids.insert(g.id)
                 || g.id == 0
                 || !coordinate([g.lon, g.lat])
@@ -63,6 +100,13 @@ impl Scenario {
             }
         }
         for u in &self.ues {
+            if u.mobility.waypoints.len() > 128
+                || !u.mobility.waypoints.iter().all(|p| coordinate(*p))
+                || !(0.0..=100.0).contains(&u.mobility.speed_mps)
+            {
+                return Err("Invalid mobility: ≤128 finite waypoints, speed 0–100 m/s".into());
+            }
+
             if !ids.insert(u.id) || u.id == 0 || !coordinate([u.lon, u.lat]) || u.name.len() > 80 {
                 return Err("Invalid UE or duplicate entity ID".into());
             }
@@ -117,4 +161,86 @@ fn simple_ring(ring: &[[f64; 2]]) -> bool {
         }
     }
     true
+}
+
+/// Reproducible negative experiments, never a credential import facility.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LabFault {
+    #[default]
+    None,
+    UnknownSubscriber,
+    InvalidCredentials,
+    InvalidAutn,
+    IncorrectResponse,
+    InvalidMac,
+    InvalidCounter,
+    Timeout,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Antenna {
+    pub sector: bool,
+    pub azimuth_deg: f64,
+    pub downtilt_deg: f64,
+    pub resource_blocks: u16,
+    pub numerology: u8,
+}
+impl Default for Antenna {
+    fn default() -> Self {
+        Self {
+            sector: false,
+            azimuth_deg: 0.0,
+            downtilt_deg: 0.0,
+            resource_blocks: 106,
+            numerology: 1,
+        }
+    }
+}
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Mobility {
+    pub waypoints: Vec<[f64; 2]>,
+    pub speed_mps: f64,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RadioKind {
+    #[default]
+    Legacy,
+    UMi,
+    UMa,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RadioConfig {
+    pub model: RadioKind,
+    pub shadow_fading: bool,
+    pub coverage_dbm: f64,
+    pub hysteresis_db: f64,
+    pub time_to_trigger_ms: u64,
+    pub duration_ms: u64,
+}
+impl Default for RadioConfig {
+    fn default() -> Self {
+        Self {
+            model: RadioKind::Legacy,
+            shadow_fading: false,
+            coverage_dbm: -120.0,
+            hysteresis_db: 3.0,
+            time_to_trigger_ms: 320,
+            duration_ms: 10000,
+        }
+    }
+}
+impl RadioConfig {
+    fn validate(&self) -> Result<(), String> {
+        if !(-150.0..=-50.0).contains(&self.coverage_dbm)
+            || !(0.0..=20.0).contains(&self.hysteresis_db)
+            || self.time_to_trigger_ms > 10000
+            || !(1000..=3600000).contains(&self.duration_ms)
+        {
+            return Err("Invalid radio thresholds, TTT or experiment duration (1–3600 s)".into());
+        }
+        Ok(())
+    }
 }

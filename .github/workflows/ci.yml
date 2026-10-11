@@ -1,0 +1,46 @@
+name: Research validation
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.97.1'
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install wasm-pack --version 0.15.0 --locked
+      - run: cargo install cargo-audit --version 0.22.2 --locked
+      - run: npm ci
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm run test:wasm && npm run test:worker
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npm run test:browser
+      - run: npm audit --audit-level=moderate
+      - run: cargo audit
+      - run: node scripts/check-licenses.mjs
+      - run: python3 scripts/generate-kdf-vectors.py > /tmp/kdf.json && diff engine/tests/kdf-vectors.json /tmp/kdf.json
+      - run: node scripts/verify-build.mjs && npm run build && node scripts/verify-build.mjs --compare
+      - run: cargo run --release --locked -p ranterra-engine --example benchmark && npm run benchmark:wasm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ranterra-static-candidate
+          path: |
+            dist/
+            build-manifest.json
+            docs/V1_RELEASE_REPORT.md
+            docs/DEPENDENCIES.json

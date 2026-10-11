@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "name": "Authentication fault isolation",
+  "seed": 42,
+  "center": [
+    2.3639,
+    48.8674
+  ],
+  "gnodebs": [
+    {
+      "id": 1,
+      "name": "Lab gNodeB",
+      "lon": 2.3639,
+      "lat": 48.8674,
+      "frequency_mhz": 3500,
+      "tx_power_dbm": 46,
+      "height_m": 25,
+      "gain_dbi": 16
+    }
+  ],
+  "ues": [
+    {
+      "id": 100,
+      "name": "None",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "fault": "None"
+    },
+    {
+      "id": 101,
+      "name": "UnknownSubscriber",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "fault": "UnknownSubscriber"
+    },
+    {
+      "id": 102,
+      "name": "InvalidCredentials",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "fault": "InvalidCredentials"
+    },
+    {
+      "id": 103,
+      "name": "InvalidAutn",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "fault": "InvalidAutn"
+    },
+    {
+      "id": 104,
+      "name": "IncorrectResponse",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "fault": "IncorrectResponse"
+    },
+    {
+      "id": 105,
+      "name": "InvalidMac",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "fault": "InvalidMac"
+    },
+    {
+      "id": 106,
+      "name": "InvalidCounter",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "fault": "InvalidCounter"
+    },
+    {
+      "id": 107,
+      "name": "Timeout",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "fault": "Timeout"
+    }
+  ],
+  "buildings": []
+}

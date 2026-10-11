@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "name": "UMa waypoint experiment",
+  "seed": 42,
+  "center": [
+    2.3639,
+    48.8674
+  ],
+  "gnodebs": [
+    {
+      "id": 1,
+      "name": "Lab gNodeB",
+      "lon": 2.3639,
+      "lat": 48.8674,
+      "frequency_mhz": 3500,
+      "tx_power_dbm": 46,
+      "height_m": 25,
+      "gain_dbi": 16
+    }
+  ],
+  "ues": [
+    {
+      "id": 101,
+      "name": "Lab UE",
+      "lon": 2.3645,
+      "lat": 48.8674,
+      "mobility": {
+        "speed_mps": 15,
+        "waypoints": [
+          [
+            2.3685,
+            48.8674
+          ]
+        ]
+      }
+    }
+  ],
+  "buildings": [],
+  "radio": {
+    "model": "UMa",
+    "duration_ms": 30000
+  }
+}

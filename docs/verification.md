@@ -1,18 +1,28 @@
-# Verification record
+# Verification record — 2026-10-11
 
-Validated locally on 2026-10-11. This record describes this MVP's tests, not standards conformance certification.
+This supersedes the MVP rejection-only verification record. It is evidence for a candidate, not standards certification. Stable v1.0 remains blocked; see [release report](V1_RELEASE_REPORT.md).
 
-- Native Rust unit tests: NAS request round trip and header, known rejection vector, malformed NAS, NGAP APER round trips and UE-ID checking, deterministic scheduling, state transitions, multiple UEs, no coverage, RF attenuation and input/geometry validation.
-- Actual WASM runtime: request/reject exchange, NGAP events, deterministic output across step sizes, 1,225 RF samples and invalid-input rejection.
-- Production worker: built Vite worker with actual WASM, external fetches forbidden, step, pause/resume, queue completion, reset and deterministic replay, stale-revision isolation and rejected scenario load.
-- TypeScript and Vite production compilation, including separate MapLibre and network-engine workers.
-- Browser UI: rendered OSM map and building/coverage layers, NAS/NGAP timeline and hex inspector, pause/resume/step/reset, UE placement/movement, radio-power editing with recomputed RSRP, reload persistence, scenario JSON import, rejected invalid-version import, entity deletion, and event-log download. Live Nominatim search selected Lyon and the OSM retrieval path loaded 600 bounded building footprints there.
-- Browser exchange ended in `RegistrationRejected`, while inspector explicitly displayed `Not registered`. The exported rejection bytes were `7e 00 44 07`.
+Baseline before edits: 14 native Rust tests plus actual WASM and production-worker tests passed.
 
-The initial Carto tile URL returned API-key images and was replaced with OSM Standard. MapLibre's explicit Vite worker URL was added after a browser worker-load error. The final app uses MapLibre 6 and deck.gl's dedicated MapLibre integration. The npm dependency audit reported zero known vulnerabilities.
+Final local implementation checks:
 
-Public Overpass endpoints were unreliable during development. The bundled Paris geometry was obtained directly from OSM's map API. Optional live building retrieval can still fail and is reported to the user. Browser tests exercised both the built-in Paris geometry and live Lyon geometry. The app retries an Overpass failure with one bounded OSM map API request; public services are not mocked in application code.
+- `cargo test --workspace`: 31 unit + 3 cryptographic integration tests passed. Coverage includes real registration, independent contexts, all fault profiles, NAS replay/count rollover, PDU lifecycle and late traffic after teardown, APER/malformed parsing, radio/geometry, deterministic scheduler/mobility and unknown-input rejection.
+- `npm run build`: Rust WASM release, TypeScript and Vite production output succeeded. Separate emulation and MapLibre workers and actual .wasm asset emitted.
+- `npm run test:wasm`: actual compiled WASM registration, session/echo/release/deregistration and replay checks passed.
+- `npm run test:worker`: production Vite worker in a Node worker host with external fetch forbidden passed session traffic, pause/resume, revision ordering, replay and failed-load isolation.
+- `npm run test:browser`: 8 production browser tests passed, 4 Chromium and 4 Firefox. Real WASM and production worker, no frontend protocol stubs. External geographic assets disabled. Map canvas, state changes, inspector, data-plane actions, editing, persistence, export/import rejection, offline computation, worker recovery, CSP/cache/MIME and route refresh exercised.
+- ESLint, Rust formatting and Clippy (`--all-targets --locked -- -D warnings`) passed. Independent Python KDF fixture regeneration matched checked-in bytes.
+- `node scripts/verify-build.mjs` followed by a second full build and `--compare`: all 38 production artifacts matched byte-for-byte on this machine/toolchain; WASM magic and worker presence checked. This does not claim identical output across different checkout paths/operating systems.
+- Clean source-copy `npm ci`, build and native/WASM/worker checks passed without copied node_modules, generated WASM, dist or target. Repeated with Node 24.18.0 and rustup 1.97.1. The earlier initial copy also passed with Node 22.11 (engine warnings); use Node 24 as documented. Minor final storage/list and documentation edits were verified in the main checkout.
+- Native replay example successfully loads both new research/mobility and authentication-fault scenarios. At 1,000 virtual ms the fault scenario isolates one registered UE and six rejected UEs; the timeout UE correctly remains pending until its 6,000 ms deadline (deadline covered in unit tests).
+- Dependency checks: npm zero known vulnerabilities; cargo no known vulnerabilities with one unmaintained-package warning (`paste`); 417 locked package license expressions reviewed. No AGPL source introduced.
 
-Limits: no full registration, authentication/security, real radio PHY, calibrated RF accuracy, external mobile-core interoperability, or browser compatibility matrix was validated. The worker test is a Node host of the built browser worker, complemented by interactive testing in the desktop app's actual browser. It does not claim an automated cross-browser end-to-end suite.
+Production build warnings remain for the large geography chunk (~1.93 MB uncompressed), an unused loaders.gl Node child-process export, and wasm-pack's platform binary fallback (successfully builds the required binding tool). These did not prevent the real browser tests from passing. They are not silently represented as warning-free builds.
 
-![Verified desktop application with decoded NGAP packet and unregistered UE](preview.jpg)
+Browser screenshots are generated under ignored `test-results/production-workspace.png`. No fresh hosted deployment, remote GitHub Actions run, mobile/WebKit coverage, external-core interoperability session, independent RF-tool/drive-test comparison, sustained fuzzing or full ASVS assessment was performed.
+
+## Performance evidence
+
+See the release report for native/WASM timings, memory definitions and workload. Worker benchmark uses `node scripts/test-worker.mjs --benchmark`; it reloads the same 16-cell/128-UE/467-building scenario ten times, timing message submission through receipt of the serialized snapshot. It includes scenario validation, RF grid construction, serialization and structured-clone transfer, but not browser painting. Results from the final run are appended below.
+
+Final worker-host result: **48.316 ms median**, **57.344 ms maximum**, ten runs. Sampled whole Node-process RSS **492,797,952 bytes** (includes worker host/JIT, not peak browser memory). No main-thread browser paint time is included.

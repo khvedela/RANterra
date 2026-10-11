@@ -1,3 +1,4 @@
+import { config } from "./config";
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import { MapLibreOverlay } from "@deck.gl/maplibre";
@@ -53,27 +54,32 @@ export default function NetworkMap(props: Props) {
       attributionControl: { compact: false },
       style: {
         version: 8,
-        sources: {
-          basemap: {
-            type: "raster",
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-            tileSize: 256,
-            attribution:
-              '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          },
-        },
+        sources: config.tiles
+          ? {
+              basemap: {
+                type: "raster",
+                tiles: config.tiles ? [config.tiles] : [],
+                tileSize: 256,
+                attribution: config.attribution,
+              },
+            }
+          : {},
         layers: [
           {
             id: "background",
             type: "background",
             paint: { "background-color": "#e6e9e3" },
           },
-          {
-            id: "base",
-            type: "raster",
-            source: "basemap",
-            paint: { "raster-saturation": -0.65, "raster-opacity": 0.72 },
-          },
+          ...(config.tiles
+            ? [
+                {
+                  id: "base",
+                  type: "raster" as const,
+                  source: "basemap",
+                  paint: { "raster-saturation": -0.65, "raster-opacity": 0.72 },
+                },
+              ]
+            : []),
         ],
       },
     });
@@ -123,6 +129,7 @@ export default function NetworkMap(props: Props) {
       button.className = `entity-marker ${entity.type} ${props.selected === entity.id ? "selected" : ""}`;
       button.setAttribute("aria-label", `Select ${entity.name}`);
       const status = props.snapshot?.ues.find((u) => u.id === entity.id);
+      button.dataset.state = status?.state ?? "Idle";
       button.innerHTML =
         entity.type === "gnodeb"
           ? '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 9v12m-4 0h8M8 11a6 6 0 0 1 0-8m8 0a6 6 0 0 1 0 8M5 14a10 10 0 0 1 0-14m14 0a10 10 0 0 1 0 14"/><circle cx="12" cy="7" r="2"/></svg>'
@@ -149,7 +156,7 @@ export default function NetworkMap(props: Props) {
         draggable: props.mode === "select",
         anchor: "center",
       })
-        .setLngLat([entity.lon, entity.lat])
+        .setLngLat(status?.position ?? [entity.lon, entity.lat])
         .addTo(map.current!);
       marker.on("dragend", () => {
         const p = marker.getLngLat();
@@ -185,7 +192,12 @@ export default function NetworkMap(props: Props) {
       const ue = scenario.ues.find((x) => x.id === u.id),
         g = scenario.gnodebs.find((x) => x.id === u.serving_cell);
       return ue && g
-        ? [{ from: [ue.lon, ue.lat] as Point, to: [g.lon, g.lat] as Point }]
+        ? [
+            {
+              from: u.position ?? ([ue.lon, ue.lat] as Point),
+              to: [g.lon, g.lat] as Point,
+            },
+          ]
         : [];
     });
     overlay.current?.setProps({

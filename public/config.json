@@ -1,0 +1,7 @@
+{
+  "tiles": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "attribution": "© OpenStreetMap contributors · ODbL",
+  "search": "",
+  "overpass": "https://overpass-api.de/api/interpreter",
+  "osmMap": ""
+}

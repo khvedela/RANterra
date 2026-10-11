@@ -5,6 +5,8 @@ pub enum Endpoint {
     Ue(u32),
     Gnodeb(u32),
     Amf,
+    Upf,
+    DataGnodeb(u32),
 }
 #[derive(Clone, Debug)]
 pub struct Frame {

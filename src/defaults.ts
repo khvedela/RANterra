@@ -1,6 +1,14 @@
 import type { Scenario } from "./types";
 export const demo: Scenario = {
   version: 1,
+  radio: {
+    model: "UMa",
+    shadow_fading: false,
+    coverage_dbm: -120,
+    hysteresis_db: 3,
+    time_to_trigger_ms: 320,
+    duration_ms: 10000,
+  },
   name: "République · urban lab",
   seed: 42,
   center: [2.3639, 48.8674],
@@ -22,7 +30,7 @@ export const demo: Scenario = {
       lat: 48.8658,
       frequency_mhz: 3500,
       tx_power_dbm: 43,
-      height_m: 20,
+      height_m: 25,
       gain_dbi: 14,
     },
   ],

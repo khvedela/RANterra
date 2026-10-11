@@ -1637,3 +1637,106 @@ h1 input:hover {
   font-size: 10px;
   color: #6d8657;
 }
+/* Research controls share the existing restrained palette. */
+select {
+  max-width: 100%;
+  border: 1px solid #aebca3;
+  border-radius: 4px;
+  padding: 5px;
+  background: #fff;
+  color: #284c3d;
+  font: inherit;
+}
+.location-section > label,
+.inspector-section label {
+  display: block;
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 7px 0;
+  color: #365442;
+}
+.inspector-section button {
+  margin: 4px 4px 4px 0;
+  font-size: 10px;
+}
+.inspector-section input[type="number"],
+.left-panel input[type="number"] {
+  max-width: 110px;
+  padding: 4px;
+}
+.right-panel {
+  overflow-y: auto;
+}
+.workspace-actions {
+  flex-wrap: wrap;
+}
+.timeline-filters {
+  flex-wrap: wrap;
+}
+.entity-marker[data-state="Registered"] .ue-dot {
+  background: #176443;
+  box-shadow: 0 0 0 3px #d5efda;
+}
+.entity-marker[data-state="RegistrationRejected"] .ue-dot,
+.entity-marker[data-state="NoCoverage"] .ue-dot {
+  background: #ad442f;
+}
+:focus-visible {
+  outline: 2px solid #176443;
+  outline-offset: 3px;
+}
+.model-modal dt {
+  font-size: 12px;
+  color: #365442;
+  margin-top: 12px;
+}
+.model-modal dd {
+  margin-left: 0;
+  font-size: 18px;
+  color: #183d2b;
+}
+.model-modal table {
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.model-modal th,
+.model-modal td {
+  padding: 8px;
+  border-bottom: 1px solid #d3ddc5;
+}
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 180px minmax(280px, 1fr);
+  }
+  .right-panel {
+    grid-column: 1/-1;
+    max-height: 40vh;
+  }
+  .workspace-bar {
+    height: auto;
+    min-height: 90px;
+  }
+  .workspace-actions {
+    max-width: 55%;
+  }
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+  }
+  .map-column {
+    min-height: 650px;
+  }
+  .top-tabs {
+    display: none;
+  }
+}
+
+.hint,
+.section-label,
+.eyebrow,
+.area-meta,
+.entity-row small {
+  color: #536347;
+}

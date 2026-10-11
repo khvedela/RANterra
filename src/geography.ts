@@ -1,3 +1,4 @@
+import { config, boundedText } from "./config";
 import type { Building, Point } from "./types";
 import { cacheGet, cachePut } from "./storage";
 export interface Place {
@@ -7,21 +8,39 @@ export interface Place {
 }
 let lastSearch = 0;
 export async function searchPlaces(query: string): Promise<Place[]> {
-  const key = `search:${query.toLowerCase().trim()}`;
+  if (!config.search)
+    throw Error(
+      "Place search is disabled. Configure a permitted geocoding provider in config.json, or enter longitude, latitude.",
+    );
+  if (query.length > 200) throw Error("Search query is too long");
+  const key = `search:${config.search}:${query.toLowerCase().trim()}`;
   const cached = await cacheGet<Place[]>(key);
   if (cached) return cached;
   if (Date.now() - lastSearch < 1100)
     throw Error("Please wait a second between searches.");
   lastSearch = Date.now();
   const r = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}`,
+    `${config.search}?format=json&limit=5&q=${encodeURIComponent(query)}`,
     { signal: AbortSignal.timeout(15000) },
   );
   if (!r.ok)
     throw Error(
       "Place search is unavailable. Pan the map or enter longitude, latitude.",
     );
-  const places = (await r.json()) as Place[];
+  const raw: unknown = JSON.parse(await boundedText(r, 100000));
+  if (!Array.isArray(raw)) throw Error("Invalid place search response");
+  const places = raw
+    .slice(0, 5)
+    .filter(
+      (p): p is Place =>
+        p &&
+        typeof p.display_name === "string" &&
+        p.display_name.length < 1000 &&
+        Number.isFinite(Number(p.lon)) &&
+        Math.abs(Number(p.lon)) <= 180 &&
+        Number.isFinite(Number(p.lat)) &&
+        Math.abs(Number(p.lat)) <= 85,
+    );
   await cachePut(key, places);
   return places;
 }
@@ -46,6 +65,7 @@ function boundedBuildings(items: { id: string; ring: Point[] }[]): Building[] {
   return buildings;
 }
 export async function fetchBuildings(center: Point): Promise<Building[]> {
+  if (!config.overpass && !config.osmMap) throw Error("Building providers are disabled in config.json");
   const key = `buildings:v2:${center.map((v) => v.toFixed(4)).join(",")}`;
   const cached = await cacheGet<Building[]>(key);
   if (cached) return cached;
@@ -59,13 +79,13 @@ export async function fetchBuildings(center: Point): Promise<Building[]> {
   const query = `[out:json][timeout:10];way[building][building!="no"](${south},${west},${north},${east});out geom;`;
   let buildings: Building[];
   try {
-    const response = await fetch("https://overpass-api.de/api/interpreter", {
+    const response = await fetch(config.overpass, {
       method: "POST",
       body: new URLSearchParams({ data: query }),
       signal: AbortSignal.timeout(12000),
     });
     if (!response.ok) throw Error("Overpass unavailable");
-    const json = (await response.json()) as {
+    const json = JSON.parse(await boundedText(response, 5000000)) as {
       elements: { id: number; geometry?: { lon: number; lat: number }[] }[];
       remark?: string;
     };
@@ -81,13 +101,14 @@ export async function fetchBuildings(center: Point): Promise<Building[]> {
     // A small, explicit map-area request to OSM's read API. This is real
     // geometry, not fabricated fallback data, and uses the same bounding box.
     try {
+      if (!config.osmMap) throw Error("OSM map fallback disabled");
       const response = await fetch(
-        `https://api.openstreetmap.org/api/0.6/map?bbox=${west},${south},${east},${north}`,
+        `${config.osmMap}?bbox=${west},${south},${east},${north}`,
         { signal: AbortSignal.timeout(15000) },
       );
       if (!response.ok) throw Error("OSM map API unavailable");
       const xml = new DOMParser().parseFromString(
-        await response.text(),
+        await boundedText(response, 5000000),
         "application/xml",
       );
       if (xml.querySelector("parsererror")) throw Error("Malformed OSM data");

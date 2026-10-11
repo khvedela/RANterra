@@ -1,6 +1,6 @@
 {
   "name": "ranterra",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -14,7 +14,12 @@
     "preview": "vite preview --host 127.0.0.1",
     "test:worker": "node scripts/test-worker.mjs",
     "test": "npm run test:rust && npm run test:wasm && npm run test:worker",
-    "format": "prettier --write src/*.ts src/*.tsx src/*.css scripts/*.mjs README.md docs/*.md && cargo fmt --all"
+    "format": "prettier --write src/*.ts src/*.tsx src/*.css scripts/*.mjs README.md docs/*.md && cargo fmt --all",
+    "lint": "eslint src tests scripts *.ts *.js",
+    "typecheck": "tsc -b",
+    "test:browser": "playwright test",
+    "benchmark": "cargo run --release -p ranterra-engine --example benchmark",
+    "benchmark:wasm": "node scripts/benchmark-wasm.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.0",
@@ -29,12 +34,18 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.0",
     "@types/geojson": "^7946.0.16",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
     "prettier": "^3.9.10",
     "typescript": "^5.9.0",
+    "typescript-eslint": "^8.71.1",
     "vite": "^7.1.0"
   },
   "overrides": {

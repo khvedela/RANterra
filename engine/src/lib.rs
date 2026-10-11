@@ -1,7 +1,12 @@
+pub mod research;
+pub mod session;
+
+pub mod auth;
 pub mod model;
 pub mod ngap;
 pub mod protocol;
 pub mod radio;
+pub mod registration;
 pub mod simulation;
 pub mod transport;
 
@@ -30,6 +35,16 @@ mod wasm {
             self.inner
                 .advance(ms as u64)
                 .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn session(&mut self, id: u32, action: &str, loss: u8) -> Result<(), JsValue> {
+            match action {
+                "establish" => self.inner.establish_session(id),
+                "deregister" => self.inner.deregister(id),
+                "release" => self.inner.release_session(id),
+                "echo" => self.inner.echo(id, loss),
+                _ => Err("Unknown session action".into()),
+            }
+            .map_err(|e| JsValue::from_str(&e))
         }
         pub fn snapshot(&self) -> Result<String, JsValue> {
             serde_json::to_string(&self.inner.snapshot())

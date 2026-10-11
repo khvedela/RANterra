@@ -12,6 +12,8 @@ const result = spawnSync(
     "--out-dir",
     "../src/wasm",
     "--release",
+    "--",
+    "--locked",
   ],
   {
     stdio: "inherit",
