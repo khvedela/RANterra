@@ -50,6 +50,7 @@ export default function NetworkMap(props: Props) {
     try {
       m = new maplibregl.Map({
         container: container.current,
+        trackResize: false,
         center: props.scenario.center,
         zoom: 15.5,
         maxZoom: 19,
@@ -114,7 +115,12 @@ export default function NetworkMap(props: Props) {
       const p = m.getCenter();
       setPosition([p.lng, p.lat]);
     });
-    const resize = new ResizeObserver(() => m.resize());
+    // Use one size observer. Native resize/redraw can advance an animation
+    // with its old viewport before this observer runs, shifting the camera.
+    const resize = new ResizeObserver(() => {
+      m.stop();
+      m.resize();
+    });
     resize.observe(container.current);
     return () => {
       resize.disconnect();
@@ -180,7 +186,17 @@ export default function NetworkMap(props: Props) {
       });
       return marker;
     });
-    return () => markers.forEach((m) => m.remove());
+    const markerMap = map.current;
+    const refreshMarkers = () => {
+      markers.forEach((marker) => marker.setLngLat(marker.getLngLat()));
+    };
+    // Resizing during a camera transition does not always emit a final marker
+    // movement update. Reproject through the public Marker API on resize.
+    markerMap.on("resize", refreshMarkers);
+    return () => {
+      markerMap.off("resize", refreshMarkers);
+      markers.forEach((marker) => marker.remove());
+    };
   }, [
     props.scenario.gnodebs,
     props.scenario.ues,

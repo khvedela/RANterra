@@ -725,3 +725,44 @@ test("workspace and results have no serious or critical automated accessibility 
   await expect(dialog).toHaveCSS("opacity", "1");
   await check();
 });
+
+test.describe("geographic alignment", () => {
+  test.use({ deviceScaleFactor: 2 });
+  test("map markers stay geographically aligned after desktop layout resizing", async ({
+    page,
+  }) => {
+    const marker = page.getByRole("button", {
+      name: `Select ${minimal.gnodebs[0].name}`,
+      exact: true,
+    });
+    // This fixture places the cell exactly at the map center. Its DOM marker
+    // must stay at the canvas center independently of the RF/deck.gl overlay.
+    async function centerOffset() {
+      return marker.evaluate((element) => {
+        const map = document
+          .querySelector(".map-canvas")!
+          .getBoundingClientRect();
+        const cell = element.getBoundingClientRect();
+        return Math.max(
+          Math.abs(cell.x + cell.width / 2 - map.x - map.width / 2),
+          Math.abs(cell.y + cell.height / 2 - map.y - map.height / 2),
+        );
+      });
+    }
+    await expect(marker).toBeVisible();
+    await expect.poll(centerOffset).toBeLessThan(2);
+    await page
+      .getByRole("button", { name: "Recenter scenario", exact: true })
+      .click();
+    await page.setViewportSize({ width: 2758, height: 1555 });
+    await expect.poll(centerOffset).toBeLessThan(2);
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Run simulation", exact: true }),
+    ).toBeEnabled();
+    await expect(marker).toBeVisible();
+    await expect.poll(centerOffset).toBeLessThan(2);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await expect.poll(centerOffset).toBeLessThan(2);
+  });
+});

@@ -1,6 +1,6 @@
 # Static production deployment
 
-No emulation backend is required. For the zero-server-budget recommendation and alternatives, see [free hosting options](hosting-options.md). Cloudflare deployment was authorized on 2026-10-11. Account authentication and hosted verification remain pending; no hosted deployment has yet been performed. The proposed custom domain is `ranterra.davidkh.com`.
+No emulation backend is required. For the zero-server-budget recommendation and alternatives, see [free hosting options](hosting-options.md). Cloudflare deployment was authorized on 2026-10-11. The verified routing candidate is live at https://ranterra.pages.dev; all 30 existing hosted browser checks passed. A map-resize correction is being validated before replacing it. `ranterra.davidkh.com` is associated with Pages and awaits its CNAME and certificate activation. Release publication remains on hold.
 
 ## Build prerequisites
 
