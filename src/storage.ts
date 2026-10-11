@@ -1,11 +1,11 @@
 import { openDB } from "idb";
-import type { Scenario } from "./types";
+import type { Scenario, Recording } from "./types";
 let connection: ReturnType<typeof openDB> | undefined;
 const db = () =>
-  (connection ??= openDB("ranterra", 1, {
+  (connection ??= openDB("ranterra", 2, {
     upgrade(db) {
-      db.createObjectStore("scenarios");
-      db.createObjectStore("assets");
+      for (const name of ["scenarios", "assets", "runs"])
+        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
     },
   }).catch((error) => {
     connection = undefined;
@@ -54,4 +54,11 @@ export async function listNamed(): Promise<Scenario[]> {
       await db()
     ).getAll("scenarios", IDBKeyRange.bound("named:", "named:\uffff"))
   ).filter((s): s is Scenario => s && typeof s.name === "string");
+}
+
+export async function saveRun(recording: Recording) {
+  await (await db()).put("runs", recording, "current");
+}
+export async function loadRun(): Promise<Recording | undefined> {
+  return (await db()).get("runs", "current");
 }

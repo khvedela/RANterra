@@ -15,3 +15,12 @@ Target release: 1.0.0. Release eligibility remains blocked; see `docs/V1_RELEASE
 ## 0.1.0
 
 Original Rust/WASM registration-request/reject MVP with map workspace, approximate RF, OSM geometry, deterministic transport and local persistence.
+
+
+### Follow-up: configurable sessions and portable replay
+
+- Added scenario-v2 DNN/S-NSSAI/capacity policies and per-UE service requests, protected cause-91 failures, 5GSM resource rejects and enforced virtual backoff.
+- Added bounded Rust command recording, checked portable replay, active session/in-flight packet restoration, explicit local checkpoints and imported-run comparison; retained scenario-v1 and IndexedDB migration.
+- Fixed mobility/registration timeout ordering, unchanged-velocity resets and playback-speed retention.
+- Independent free5GC checking detected and fixed the upstream NGAP RRC establishment IE ID; added N2 session AMBR. Added 16 ns-3 numerical RF reference checks and native↔WASM replay validation.
+- Candidate remains unreleased. No external deployment or publishing.

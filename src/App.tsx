@@ -30,7 +30,14 @@ import {
 } from "lucide-react";
 import NetworkMap from "./NetworkMap";
 import { demo } from "./defaults";
-import { loadScenario, saveScenario, saveNamed, listNamed } from "./storage";
+import {
+  loadScenario,
+  saveScenario,
+  saveNamed,
+  listNamed,
+  saveRun,
+  loadRun,
+} from "./storage";
 import { fetchBuildings, searchPlaces, type Place } from "./geography";
 import type {
   Building,
@@ -38,6 +45,9 @@ import type {
   NetworkEvent,
   Point,
   Scenario,
+  Recording,
+  SessionPolicy,
+  SessionRequest,
   Snapshot,
   ToolMode,
   WorkerCommand,
@@ -89,7 +99,27 @@ export default function App() {
     entity = gnodeb ?? ue;
   const session = snapshot?.sessions.find((s) => s.ue_id === selected);
   const [speed, setSpeed] = useState(0.1);
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
   const [library, setLibrary] = useState<Scenario[]>([]);
+  const [policiesOpen, setPoliciesOpen] = useState(false);
+  const [lossPercent, setLossPercent] = useState(0);
+  const importPurpose = useRef<"restore" | "compare">("restore");
+  const [comparison, setComparison] = useState<{
+    name: string;
+    snapshot: Snapshot;
+  } | null>(null);
+  const defaultRequest: SessionRequest = {
+    dnn: "lab",
+    snssai: { sst: 1, sd: null },
+  };
+  const policies = scenario.session_policies ?? [
+    { request: defaultRequest, max_sessions: 128 },
+  ];
+  const ueRequest = ue?.session ?? defaultRequest;
+  const sessionFailure = selected
+    ? snapshot?.session_failures?.[selected]
+    : undefined;
   const [resultsOpen, setResultsOpen] = useState(false);
   const [baseline, setBaseline] = useState<{
     registered: number;
@@ -157,7 +187,7 @@ export default function App() {
         type: "session",
         id: selected,
         action,
-        loss: 0,
+        loss: lossPercent,
         revision: activeRevision.current,
       } satisfies WorkerCommand);
   }
@@ -168,12 +198,12 @@ export default function App() {
       revision: activeRevision.current,
     } satisfies WorkerCommand);
   }
-  function apply(s: Scenario) {
+  function apply(s: Scenario | Recording) {
     setPending(true);
     setRunning(false);
     setError("");
     setSaved(false);
-    candidate.current = s;
+    candidate.current = "format" in s ? s.scenario : s;
     revision.current++;
     worker.current?.postMessage({
       type: "load",
@@ -190,6 +220,21 @@ export default function App() {
     w.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const data = e.data;
       if (data.revision !== revision.current) return;
+      if (data.type === "recording") {
+        if (data.purpose === "export")
+          download("ranterra-experiment.json", data.recording);
+        else
+          void saveRun(data.recording)
+            .then(() =>
+              setNotice("Experiment checkpoint saved with command journal."),
+            )
+            .catch((e) => setNotice(`Save run failed: ${e}`));
+        return;
+      }
+      if (data.type === "comparison") {
+        setComparison({ name: data.name, snapshot: data.snapshot });
+        return;
+      }
       if (data.type === "error") {
         setError(`Rust/WASM engine: ${data.message}`);
         setPending(false);
@@ -200,6 +245,12 @@ export default function App() {
       }
       const sameRevision = activeRevision.current === data.revision;
       activeRevision.current = data.revision;
+      if (!sameRevision)
+        w.postMessage({
+          type: "speed",
+          speed: speedRef.current,
+          revision: data.revision,
+        } satisfies WorkerCommand);
       setSnapshot((prev) =>
         sameRevision && prev
           ? {
@@ -215,7 +266,7 @@ export default function App() {
       setRunning(data.running);
       setPending(false);
       if (candidate.current) {
-        const accepted = candidate.current;
+        const accepted = data.scenario ?? candidate.current;
         candidate.current = null;
         setScenario(accepted);
         scenarioRef.current = accepted;
@@ -408,17 +459,26 @@ export default function App() {
     const f = e.target.files?.[0];
     if (!f) return;
     try {
-      if (f.size > 2_000_000)
-        throw Error("Scenario must be smaller than 2 MB.");
+      if (f.size > 4_000_000)
+        throw Error("Import must be smaller than 4 MB (scenarios: 2 MB).");
       const data: unknown = JSON.parse(await f.text());
       if (!data || typeof data !== "object")
         throw Error("Expected a scenario object.");
-      apply(data as Scenario);
+      if (importPurpose.current === "compare") {
+        if (!("format" in data))
+          throw Error("Comparison requires an exported experiment run.");
+        worker.current?.postMessage({
+          type: "compare",
+          recording: data as Recording,
+          revision: activeRevision.current,
+        } satisfies WorkerCommand);
+      } else apply(data as Scenario | Recording);
       setSelected(null);
     } catch (e) {
       setNotice(`Import failed: ${e}`);
     } finally {
       e.target.value = "";
+      importPurpose.current = "restore";
     }
   }
   const events = (snapshot?.events ?? []).filter(
@@ -491,6 +551,9 @@ export default function App() {
                 : "Local workspace"}
           </span>
           <button onClick={() => setResultsOpen(true)}>Results</button>
+          <button onClick={() => setPoliciesOpen(true)}>
+            Session policies
+          </button>
           <button onClick={() => void saveCopy()}>Save copy</button>
           <select
             aria-label="Saved scenarios"
@@ -512,7 +575,12 @@ export default function App() {
               </option>
             ))}
           </select>
-          <button onClick={() => file.current?.click()}>
+          <button
+            onClick={() => {
+              importPurpose.current = "restore";
+              file.current?.click();
+            }}
+          >
             <ArrowUpFromLine size={15} /> Import
           </button>
           <button onClick={() => download("ranterra-scenario.json", scenario)}>
@@ -1191,12 +1259,43 @@ export default function App() {
                     </div>
                     <button
                       disabled={
-                        ueStatus?.state !== "Registered" || !!session?.active
+                        ueStatus?.state !== "Registered" ||
+                        !!session?.active ||
+                        !!(
+                          sessionFailure &&
+                          (sessionFailure.retry_at_ms === null ||
+                            (snapshot?.time_ms ?? 0) <
+                              sessionFailure.retry_at_ms)
+                        )
                       }
                       onClick={() => sessionAction("establish")}
                     >
                       Establish PDU session
                     </button>
+                    {sessionFailure && (
+                      <p role="status">
+                        {sessionFailure.domain} cause {sessionFailure.cause}:{" "}
+                        {sessionFailure.reason}
+                        {sessionFailure.retry_at_ms !== null
+                          ? `; retry at ${sessionFailure.retry_at_ms} virtual ms`
+                          : ""}
+                      </p>
+                    )}
+                    <label>
+                      Echo loss (%)
+                      <input
+                        aria-label="Echo loss percent"
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={lossPercent}
+                        onChange={(e) =>
+                          setLossPercent(
+                            Math.max(0, Math.min(100, Number(e.target.value))),
+                          )
+                        }
+                      />
+                    </label>
                     <button
                       disabled={!session?.active}
                       onClick={() => {
@@ -1227,6 +1326,121 @@ export default function App() {
                         ? "Finish trajectory"
                         : "Draw trajectory"}
                     </button>
+                    <fieldset className="session-fields">
+                      <legend>Requested data service (edits reset run)</legend>
+                      <label>
+                        DNN
+                        <input
+                          aria-label="UE DNN"
+                          key={`dnn-${ue?.id}-${ueRequest.dnn}`}
+                          defaultValue={ueRequest.dnn}
+                          maxLength={99}
+                          onBlur={(e) => {
+                            if (ue && e.target.value !== ueRequest.dnn)
+                              apply({
+                                ...scenario,
+                                ues: scenario.ues.map((u) =>
+                                  u.id === ue.id
+                                    ? {
+                                        ...u,
+                                        session: {
+                                          ...ueRequest,
+                                          dnn: e.target.value,
+                                        },
+                                      }
+                                    : u,
+                                ),
+                              });
+                          }}
+                        />
+                      </label>
+                      <label>
+                        SST
+                        <input
+                          aria-label="UE SST"
+                          type="number"
+                          min={1}
+                          max={255}
+                          key={`sst-${ue?.id}-${ueRequest.snssai.sst}`}
+                          defaultValue={ueRequest.snssai.sst}
+                          onBlur={(e) => {
+                            if (
+                              ue &&
+                              Number(e.target.value) !== ueRequest.snssai.sst
+                            )
+                              apply({
+                                ...scenario,
+                                ues: scenario.ues.map((u) =>
+                                  u.id === ue.id
+                                    ? {
+                                        ...u,
+                                        session: {
+                                          ...ueRequest,
+                                          snssai: {
+                                            ...ueRequest.snssai,
+                                            sst: Number(e.target.value),
+                                          },
+                                        },
+                                      }
+                                    : u,
+                                ),
+                              });
+                          }}
+                        />
+                      </label>
+                      <label>
+                        SD (6 hex digits, optional)
+                        <input
+                          aria-label="UE SD"
+                          key={`sd-${ue?.id}-${ueRequest.snssai.sd}`}
+                          defaultValue={
+                            ueRequest.snssai.sd
+                              ?.map((n) => n.toString(16).padStart(2, "0"))
+                              .join("") ?? ""
+                          }
+                          maxLength={6}
+                          onBlur={(e) => {
+                            const value = e.target.value;
+                            if (!/^(?:[0-9a-fA-F]{6})?$/.test(value)) {
+                              setNotice(
+                                "SD requires exactly six hex digits or an empty value.",
+                              );
+                              return;
+                            }
+                            const sd = value
+                              ? value.match(/../g)!.map((h) => parseInt(h, 16))
+                              : null;
+                            if (
+                              ue &&
+                              JSON.stringify(sd) !==
+                                JSON.stringify(ueRequest.snssai.sd)
+                            )
+                              apply({
+                                ...scenario,
+                                ues: scenario.ues.map((u) =>
+                                  u.id === ue.id
+                                    ? {
+                                        ...u,
+                                        session: {
+                                          ...ueRequest,
+                                          snssai: { ...ueRequest.snssai, sd },
+                                        },
+                                      }
+                                    : u,
+                                ),
+                              });
+                          }}
+                        />
+                      </label>
+                      {session?.active && (
+                        <p>
+                          Active: {session.dnn} · SST {session.sst} · SD{" "}
+                          {session.sd
+                            ?.map((n) => n.toString(16).padStart(2, "0"))
+                            .join("") ?? "none"}
+                        </p>
+                      )}
+                    </fieldset>
                     <label>
                       Speed (m/s)
                       <input
@@ -1238,7 +1452,11 @@ export default function App() {
                         key={`speed-${ue?.id}`}
                         onBlur={(e) => {
                           const speed = Number(e.target.value);
-                          if (speed >= 0 && speed <= 100)
+                          if (
+                            speed >= 0 &&
+                            speed <= 100 &&
+                            speed !== (ue?.mobility?.speed_mps ?? 0)
+                          )
                             apply({
                               ...scenario,
                               ues: scenario.ues.map((u) =>
@@ -1467,6 +1685,9 @@ export default function App() {
         <div className="error-banner" role="alert">
           <ShieldAlert size={20} />
           <span>{error}</span>
+          {snapshot && error.startsWith("Rust/WASM engine:") && (
+            <button onClick={() => setError("")}>Continue current run</button>
+          )}
           <button
             onClick={() => {
               setError("");
@@ -1485,6 +1706,121 @@ export default function App() {
         <div role="status" className="toast">
           Trace limit reached (16,384 events). Reset before recording more
           events; computation continues.
+        </div>
+      )}
+      {policiesOpen && (
+        <div className="modal-scrim">
+          <section
+            className="model-modal session-policy-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Session policies"
+          >
+            <button
+              className="modal-close"
+              aria-label="Close policies"
+              onClick={() => setPoliciesOpen(false)}
+            >
+              <X size={18} />
+            </button>
+            <h2>Network session policies</h2>
+            {error && <p role="alert">{error}</p>}
+            <p>
+              Each row permits one DNN / S-NSSAI pair. Capacity counts active
+              sessions across UEs. Zero denies new sessions. Applying changes
+              resets execution.
+            </p>
+            <form
+              key={JSON.stringify(policies)}
+              onSubmit={(e) => {
+                e.preventDefault();
+                const data = new FormData(e.currentTarget);
+                const next: SessionPolicy[] = [];
+                for (let i = 0; i < 8; i++) {
+                  const dnn = String(data.get(`dnn-${i}`) ?? "").trim();
+                  if (!dnn) continue;
+                  const hex = String(data.get(`sd-${i}`) ?? "").trim();
+                  if (!/^(?:[0-9a-fA-F]{6})?$/.test(hex)) {
+                    setNotice("SD requires six hex digits or an empty value.");
+                    return;
+                  }
+                  next.push({
+                    request: {
+                      dnn,
+                      snssai: {
+                        sst: Number(data.get(`sst-${i}`)),
+                        sd: hex
+                          ? hex.match(/../g)!.map((h) => parseInt(h, 16))
+                          : null,
+                      },
+                    },
+                    max_sessions: Number(data.get(`capacity-${i}`)),
+                  });
+                }
+                apply({ ...scenario, session_policies: next });
+              }}
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>DNN (blank removes)</th>
+                    <th>SST</th>
+                    <th>SD (hex)</th>
+                    <th>Capacity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 8 }, (_, i) => (
+                    <tr key={i}>
+                      <td>
+                        <input
+                          aria-label={`Policy ${i + 1} DNN`}
+                          name={`dnn-${i}`}
+                          defaultValue={policies[i]?.request.dnn ?? ""}
+                          maxLength={99}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          aria-label={`Policy ${i + 1} SST`}
+                          name={`sst-${i}`}
+                          type="number"
+                          min={1}
+                          max={255}
+                          defaultValue={policies[i]?.request.snssai.sst ?? 1}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          aria-label={`Policy ${i + 1} SD`}
+                          name={`sd-${i}`}
+                          maxLength={6}
+                          defaultValue={
+                            policies[i]?.request.snssai.sd
+                              ?.map((n) => n.toString(16).padStart(2, "0"))
+                              .join("") ?? ""
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          aria-label={`Policy ${i + 1} capacity`}
+                          name={`capacity-${i}`}
+                          type="number"
+                          min={0}
+                          max={128}
+                          defaultValue={policies[i]?.max_sessions ?? 128}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button type="submit" disabled={pending}>
+                Apply policies
+              </button>
+            </form>
+          </section>
         </div>
       )}
       {resultsOpen && (
@@ -1564,6 +1900,109 @@ export default function App() {
             <button onClick={() => setBaseline({ registered, latency })}>
               Keep comparison
             </button>
+            <p>
+              Experiment checkpoints include ordered commands and reconstruct
+              protocol state without storing keys. Export and save pause
+              playback.
+            </p>
+            <button
+              disabled={pending}
+              onClick={() =>
+                worker.current?.postMessage({
+                  type: "recording",
+                  purpose: "export",
+                  revision: activeRevision.current,
+                } satisfies WorkerCommand)
+              }
+            >
+              Export experiment
+            </button>
+            <button
+              disabled={pending}
+              onClick={() =>
+                worker.current?.postMessage({
+                  type: "recording",
+                  purpose: "save",
+                  revision: activeRevision.current,
+                } satisfies WorkerCommand)
+              }
+            >
+              Save run
+            </button>
+            <button
+              onClick={() => {
+                void loadRun()
+                  .then((r) => {
+                    if (r) apply(r);
+                    else setNotice("No saved run checkpoint.");
+                  })
+                  .catch((e) => setNotice(String(e)));
+              }}
+            >
+              Restore saved run
+            </button>
+            <button
+              onClick={() => {
+                importPurpose.current = "compare";
+                file.current?.click();
+              }}
+            >
+              Compare experiment
+            </button>
+            {comparison && (
+              <table aria-label="Experiment comparison">
+                <caption>{comparison.name} vs current run</caption>
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Imported run</th>
+                    <th>Current run</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Virtual time (ms)</td>
+                    <td>{comparison.snapshot.time_ms}</td>
+                    <td>{snapshot?.time_ms}</td>
+                  </tr>
+                  <tr>
+                    <td>Registered UEs</td>
+                    <td>
+                      {
+                        comparison.snapshot.ues.filter(
+                          (u) => u.state === "Registered",
+                        ).length
+                      }
+                    </td>
+                    <td>{registered}</td>
+                  </tr>
+                  <tr>
+                    <td>Echo delivered</td>
+                    <td>
+                      {comparison.snapshot.sessions.reduce(
+                        (n, s) => n + s.delivered,
+                        0,
+                      )}
+                    </td>
+                    <td>
+                      {snapshot?.sessions.reduce((n, s) => n + s.delivered, 0)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Echo dropped</td>
+                    <td>
+                      {comparison.snapshot.sessions.reduce(
+                        (n, s) => n + s.dropped,
+                        0,
+                      )}
+                    </td>
+                    <td>
+                      {snapshot?.sessions.reduce((n, s) => n + s.dropped, 0)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
             <button onClick={metricsCSV}>Export metrics CSV</button>
             <button
               onClick={() =>
@@ -1612,7 +2051,7 @@ export default function App() {
               Selected model: {radio.model} · TR 38.901 v18.0.0 subset or legacy
               log-distance
               <br />
-              RSRP ≈ Ptx + gain − 10 log₁₀(12 × 106) − PL − Lbuildings
+              RSRP ≈ Ptx + gain − 10 log₁₀(12 × N_RB) − PL − antenna/shadow loss
             </code>
             <p>
               UMi and UMa use LOS/NLOS path loss with 1.5 m UE height, 10–5000 m

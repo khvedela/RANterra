@@ -18,10 +18,15 @@ Old scenario files select the labeled legacy illustrative log-distance model. It
 
 Unit fixtures independently evaluate the equations at horizontal distance 100 m, frequency 3.5 GHz and terminal height 1.5 m: UMi LOS **85.314188 dB**, UMa LOS **83.1381567 dB**, tolerance 0.00001 dB. Tests also check NLOS >= LOS, domain edges, footprint attenuation, deterministic shadow values, sector orientation and co-channel interference. Mobility tests check identical snapshots across time-step sizes, coverage loss and the A3 timer.
 
-These are equation and behavioral checks. No measured drive-test calibration, complete published RF dataset comparison, or independent RF simulator comparison has run. These remain validation gaps for stronger scientific claims.
+These are equation and behavioral checks. No measured drive-test calibration or live independent RF simulator execution has run. These remain validation gaps for stronger scientific claims.
 
 ## Mobility and computational scope
 
 Waypoints interpolate by distance at configured speed in m/s, then remain at the endpoint. Static means no waypoints or zero speed. Pedestrian and vehicle experiments use different speeds; there is no road-routing model. Measurements update every 100 ms of virtual time. A3-style reassociation requires a candidate to exceed the current cell by the hysteresis margin for the configured time-to-trigger, quantized to those ticks. Reassociation invalidates the old session/registration; it is explicitly not an NGAP handover. Reset is required to initiate fresh registration.
 
 A sorted footprint bounding-box index avoids checking every polygon edge per sample. The 35×35 coverage grid is computed when loading a scenario; motion updates UE measurements without recomputing the static coverage grid. Edits currently rebuild the engine/grid. RF runs in the worker; no hidden fidelity reduction occurs under load. See the release report for measured bounded-workload results.
+
+
+## Independent numerical reference comparison
+
+`engine/tests/radio_references.rs` now checks 16 numerical points published in [ns-3.47 propagation tests](https://raw.githubusercontent.com/nsnam/ns-3-dev-git/ns-3.47/src/propagation/test/three-gpp-propagation-loss-model-test-suite.cc): both UMi/UMa, LOS/NLOS, 10/100/1000/5000 m, 5 GHz, terminal height 1.5 m, base heights 10/25 m. Every point agrees within 0.0001 dB. Separate checks cover breakpoint continuity and frequency bounds 0.5/100 GHz. This uses published numerical reference facts from SIGNET Lab / University of Padova, not copied ns-3 GPL implementation code; ns-3 is neither linked nor distributed. Some UMi reference values are assigned but not added to the upstream test vector; RANterra checks all 16 listed values. This is a numerical reference comparison, not a claim that ns-3 itself was executed here or that either model predicts measured field coverage.

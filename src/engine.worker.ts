@@ -10,10 +10,13 @@ function pause() {
   clearInterval(timer);
   timer = undefined;
 }
-function emit() {
+function emit(includeScenario = false) {
   if (engine)
     self.postMessage({
       type: "snapshot",
+      ...(includeScenario
+        ? { scenario: JSON.parse(engine.configuration()) }
+        : {}),
       snapshot: JSON.parse(engine.snapshot()),
       running: !!timer,
       revision,
@@ -57,10 +60,35 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
         engine?.free();
         engine = next;
         revision = command.revision;
-        emit();
+        emit(true);
         return;
       }
       if (command.revision !== revision || !engine) return;
+      if (command.type === "recording") {
+        pause();
+        self.postMessage({
+          type: "recording",
+          recording: JSON.parse(engine.recording()),
+          purpose: command.purpose,
+          revision,
+        } satisfies WorkerResponse);
+        emit();
+        return;
+      }
+      if (command.type === "compare") {
+        const candidate = new BrowserEngine(JSON.stringify(command.recording));
+        try {
+          self.postMessage({
+            type: "comparison",
+            snapshot: JSON.parse(candidate.snapshot()),
+            name: JSON.parse(candidate.configuration()).name,
+            revision,
+          } satisfies WorkerResponse);
+        } finally {
+          candidate.free();
+        }
+        return;
+      }
       if (command.type === "speed") {
         if (![0.1, 1, 5, 10].includes(command.speed))
           throw Error("Unsupported playback speed");

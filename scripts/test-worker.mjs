@@ -124,6 +124,26 @@ if (!isMainThread) {
     post({ type: "load", scenario: { ...scenario, version: 99 }, revision: 3 });
     const invalid = await wait((m) => m.type === "error" && m.revision === 3);
     assert.match(invalid.message, /version/);
+    post({ type: "recording", purpose: "export", revision: 2 });
+    const exported = await wait(
+      (m) => m.type === "recording" && m.revision === 2,
+    );
+    post({ type: "load", scenario: exported.recording, revision: 4 });
+    const restored = await wait(
+      (m) => m.type === "snapshot" && m.revision === 4,
+    );
+    assert.deepEqual(restored.snapshot, replay.snapshot);
+    post({
+      type: "load",
+      scenario: { ...exported.recording, state_digest: "0".repeat(64) },
+      revision: 5,
+    });
+    await wait((m) => m.type === "error" && m.revision === 5);
+    post({ type: "recording", purpose: "save", revision: 4 });
+    const unchanged = await wait(
+      (m) => m.type === "recording" && m.revision === 4,
+    );
+    assert.deepEqual(unchanged.recording, exported.recording);
     if (process.argv.includes("--benchmark")) {
       const bounded = JSON.parse(await readFile("examples/paris.json", "utf8"));
       bounded.radio = { model: "UMa" };

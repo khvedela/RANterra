@@ -19,6 +19,8 @@ pub struct Gnodeb {
 #[serde(deny_unknown_fields)]
 pub struct Ue {
     #[serde(default)]
+    pub session: SessionRequest,
+    #[serde(default)]
     pub fault: LabFault,
     #[serde(default)]
     pub mobility: Mobility,
@@ -36,6 +38,8 @@ pub struct Building {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Scenario {
+    #[serde(default = "default_policies")]
+    pub session_policies: Vec<SessionPolicy>,
     pub version: u32,
     #[serde(default)]
     pub radio: RadioConfig,
@@ -51,8 +55,8 @@ fn coordinate(p: [f64; 2]) -> bool {
 }
 impl Scenario {
     pub fn validate(&self) -> Result<(), String> {
-        if self.version != 1 {
-            return Err("Unsupported scenario version (expected 1)".into());
+        if ![1, 2].contains(&self.version) {
+            return Err("Unsupported scenario version (expected 1 or 2)".into());
         }
         if !coordinate(self.center) || self.name.len() > 120 {
             return Err("Invalid scenario center or name".into());
@@ -61,6 +65,16 @@ impl Scenario {
             return Err("Scenario exceeds limits: 16 cells, 128 UEs, 600 buildings".into());
         }
         self.radio.validate()?;
+        if self.session_policies.is_empty() || self.session_policies.len() > 8 {
+            return Err("Configure 1–8 session policies".into());
+        }
+        let mut policies = BTreeSet::new();
+        for p in &self.session_policies {
+            p.request.validate()?;
+            if p.max_sessions > 128 || !policies.insert((&p.request.dnn, &p.request.snssai)) {
+                return Err("Duplicate session policy or capacity above 128".into());
+            }
+        }
         let mut ids = BTreeSet::new();
         for g in &self.gnodebs {
             if !(0.0..=360.0).contains(&g.antenna.azimuth_deg)
@@ -100,6 +114,7 @@ impl Scenario {
             }
         }
         for u in &self.ues {
+            u.session.validate()?;
             if u.mobility.waypoints.len() > 128
                 || !u.mobility.waypoints.iter().all(|p| coordinate(*p))
                 || !(0.0..=100.0).contains(&u.mobility.speed_mps)
@@ -243,4 +258,82 @@ impl RadioConfig {
         }
         Ok(())
     }
+}
+
+/// Laboratory IPv4 service selection. SD uses its exact three on-wire octets.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(deny_unknown_fields)]
+pub struct Snssai {
+    pub sst: u8,
+    #[serde(default)]
+    pub sd: Option<[u8; 3]>,
+}
+impl Default for Snssai {
+    fn default() -> Self {
+        Self { sst: 1, sd: None }
+    }
+}
+impl Snssai {
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut b = vec![self.sst];
+        if let Some(sd) = self.sd {
+            b.extend(sd);
+        }
+        b
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct SessionRequest {
+    pub dnn: String,
+    pub snssai: Snssai,
+}
+impl Default for SessionRequest {
+    fn default() -> Self {
+        Self {
+            dnn: "lab".into(),
+            snssai: Snssai::default(),
+        }
+    }
+}
+impl SessionRequest {
+    pub fn validate(&self) -> Result<(), String> {
+        // Lower-case ASCII DNS-label profile; NAS DNN maximum encoded size is 100.
+        if self.dnn.is_empty()
+            || self.dnn.len() > 99
+            || self.dnn.split('.').any(|l| {
+                l.is_empty()
+                    || l.len() > 63
+                    || l.starts_with('-')
+                    || l.ends_with('-')
+                    || !l
+                        .bytes()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+            })
+        {
+            return Err("DNN must contain lower-case DNS labels (maximum 99 characters)".into());
+        }
+        if self.snssai.sst == 0 || self.snssai.sd == Some([255; 3]) {
+            return Err("S-NSSAI requires nonzero SST and SD other than ffffff".into());
+        }
+        Ok(())
+    }
+    pub fn dnn_bytes(&self) -> Vec<u8> {
+        self.dnn
+            .split('.')
+            .flat_map(|s| std::iter::once(s.len() as u8).chain(s.bytes()))
+            .collect()
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SessionPolicy {
+    pub request: SessionRequest,
+    pub max_sessions: u16,
+}
+fn default_policies() -> Vec<SessionPolicy> {
+    vec![SessionPolicy {
+        request: SessionRequest::default(),
+        max_sessions: 128,
+    }]
 }

@@ -10,9 +10,30 @@ pub fn initial(nas: Vec<u8>, ue: u32, cell: u32) -> Result<Vec<u8>, String> {
             None,
         ));
     let pdu = build_ngap!(InitiatingMessage,InitialUEMessage,IGNORE,InitialUEMessage,
-        REJECT RAN_UE_NGAP_ID(ue),REJECT NAS_PDU(nas),REJECT UserLocationInformation(location),IGNORE RRCEstablishmentCause(RRCEstablishmentCause::mo_Signalling),
+        REJECT RAN_UE_NGAP_ID(ue),REJECT NAS_PDU(nas),REJECT UserLocationInformation(location),
     );
-    pdu.encode().map_err(|e| e.to_string())
+    // OxiRush 0.4.2 maps RRCEstablishmentCause to 237 in its macro (should be 90).
+    // Explicit Release-18 IE adapter; independently checked by free5GC.
+    let NGAP_PDU::initiatingMessage(mut outer) = pdu else {
+        unreachable!()
+    };
+    let mut message: InitialUEMessage =
+        decode_open_type(&outer.value).map_err(|e| e.to_string())?;
+    message
+        .protocol_ies
+        .0
+        .push(AnonymousInitialUEMessageProtocolIEs::new(
+            ProtocolIEID(90),
+            Criticality::ignore,
+            rasn::types::Any::new(
+                rasn::aper::encode(&RRCEstablishmentCause::mo_Signalling)
+                    .map_err(|e| e.to_string())?,
+            ),
+        ));
+    outer.value = rasn::types::Any::new(rasn::aper::encode(&message).map_err(|e| e.to_string())?);
+    NGAP_PDU::initiatingMessage(outer)
+        .encode()
+        .map_err(|e| e.to_string())
 }
 pub fn downlink(nas: Vec<u8>, ue: u32) -> Result<Vec<u8>, String> {
     let pdu = build_ngap!(InitiatingMessage,DownlinkNASTransport,IGNORE,DownlinkNASTransport,
@@ -113,6 +134,20 @@ mod tests {
                 assert!(std::panic::catch_unwind(|| unwrap(&bytes, 1)).is_ok());
             }
         }
+    }
+    #[test]
+    fn initial_ue_uses_standard_rrc_establishment_ie_90() {
+        let b = initial(vec![0x7e, 0, 0x41], 101, 1).unwrap();
+        let NGAP_PDU::initiatingMessage(outer) = NGAP_PDU::decode(&b).unwrap() else {
+            panic!()
+        };
+        let m: InitialUEMessage = decode_open_type(&outer.value).unwrap();
+        let ie = m.protocol_ies.0.iter().find(|ie| ie.id.0 == 90).unwrap();
+        assert_eq!(
+            decode_open_type::<RRCEstablishmentCause>(&ie.value).unwrap(),
+            RRCEstablishmentCause::mo_Signalling
+        );
+        assert!(!m.protocol_ies.0.iter().any(|ie| ie.id.0 == 237));
     }
     #[test]
     fn aper_round_trip() {

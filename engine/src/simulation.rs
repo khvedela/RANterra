@@ -67,11 +67,19 @@ pub struct Snapshot {
     pub events: Vec<Event>,
     pub coverage: Vec<Sample>,
     pub sessions: Vec<crate::session::Session>,
+    pub session_failures: BTreeMap<u32, SessionFailure>,
     pub event_limit_reached: bool,
 }
 /// Experimental AI controllers can propose actions against snapshots. The scheduler owns time.
 pub trait Controller {
     fn propose(&mut self, snapshot: &Snapshot) -> Vec<String>;
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct SessionFailure {
+    pub domain: String,
+    pub cause: u8,
+    pub reason: String,
+    pub retry_at_ms: Option<u64>,
 }
 pub struct Engine<T: Transport = VirtualTransport> {
     pub scenario: Scenario,
@@ -86,6 +94,7 @@ pub struct Engine<T: Transport = VirtualTransport> {
     registrations: BTreeMap<u32, crate::registration::Registration>,
     model: Box<dyn RadioModel>,
     sessions: BTreeMap<u32, crate::session::Session>,
+    session_failures: BTreeMap<u32, SessionFailure>,
     inflight: BTreeMap<(u32, u16), u64>,
     next_session_slot: u32,
     next_mobility_tick: u64,
@@ -104,11 +113,12 @@ impl Engine<VirtualTransport> {
 }
 impl<T: Transport> Engine<T> {
     pub fn with_adapters(
-        scenario: Scenario,
+        mut scenario: Scenario,
         transport: T,
         model: Box<dyn RadioModel>,
     ) -> Result<Self, String> {
         scenario.validate()?;
+        scenario.version = 2;
         let mut e = Self {
             rng: scenario.seed,
             scenario,
@@ -123,6 +133,7 @@ impl<T: Transport> Engine<T> {
             model,
             coverage: vec![],
             sessions: BTreeMap::new(),
+            session_failures: BTreeMap::new(),
             inflight: BTreeMap::new(),
             next_session_slot: 1,
             next_mobility_tick: 100,
@@ -134,7 +145,16 @@ impl<T: Transport> Engine<T> {
         for u in &e.scenario.ues {
             e.registrations.insert(
                 u.id,
-                crate::registration::Registration::new(u.id, e.scenario.seed, u.fault)?,
+                crate::registration::Registration::new(u.id, e.scenario.seed, u.fault)?
+                    .with_slices(
+                        e.scenario
+                            .session_policies
+                            .iter()
+                            .map(|p| p.request.snssai.clone())
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .into_iter()
+                            .collect(),
+                    ),
             );
             let signal = radio::strongest(
                 e.model.as_ref(),
@@ -282,46 +302,49 @@ impl<T: Transport> Engine<T> {
             .checked_add(ms)
             .ok_or("Simulation clock overflow")?;
         loop {
-            let tick = if self.has_mobility() {
+            let mut boundary = if self.has_mobility() {
                 self.next_mobility_tick.min(until)
             } else {
                 until
             };
-            while let Some((time, frame)) = self.transport.receive(tick) {
+            let deadline_due = self.time_ms < 6000 && boundary >= 6000;
+            if deadline_due {
+                boundary = 6000;
+            }
+            while let Some((time, frame)) = self.transport.receive(boundary) {
                 self.time_ms = time;
                 self.deliver(frame)?;
             }
-            if self.has_mobility() && self.next_mobility_tick <= until {
-                self.time_ms = self.next_mobility_tick;
+            self.time_ms = boundary;
+            if self.has_mobility() && self.next_mobility_tick <= boundary {
                 self.update_mobility();
                 self.next_mobility_tick += 100;
-            } else {
-                break;
             }
-        }
-        // A single bounded procedure deadline; retransmission timers are not claimed.
-        if self.time_ms < 6000 && until >= 6000 {
-            self.time_ms = 6000;
-            let ids: Vec<_> = self
-                .ues
-                .values()
-                .filter(|u| {
-                    !matches!(
-                        u.state,
-                        UeState::Registered
-                            | UeState::RegistrationRejected
-                            | UeState::NoCoverage
-                            | UeState::ReassociationRequired
-                            | UeState::Deregistered
-                    )
-                })
-                .map(|u| u.id)
-                .collect();
-            for id in ids {
-                self.fail_ue(
-                    id,
-                    "Registration timeout (6000 ms laboratory deadline)".into(),
-                );
+            if deadline_due {
+                let ids: Vec<_> = self
+                    .ues
+                    .values()
+                    .filter(|u| {
+                        !matches!(
+                            u.state,
+                            UeState::Registered
+                                | UeState::RegistrationRejected
+                                | UeState::NoCoverage
+                                | UeState::ReassociationRequired
+                                | UeState::Deregistered
+                        )
+                    })
+                    .map(|u| u.id)
+                    .collect();
+                for id in ids {
+                    self.fail_ue(
+                        id,
+                        "Registration timeout (6000 ms laboratory deadline)".into(),
+                    );
+                }
+            }
+            if boundary == until {
+                break;
             }
         }
         self.time_ms = until;
@@ -611,7 +634,23 @@ impl<T: Transport> Engine<T> {
         uplink: bool,
         initial: bool,
     ) -> Result<Vec<u8>, String> {
-        let plain = crate::session::n1(sm, uplink, initial)?;
+        let request = &self
+            .scenario
+            .ues
+            .iter()
+            .find(|u| u.id == id)
+            .ok_or("Unknown UE")?
+            .session;
+        let plain = crate::session::n1(sm, uplink, initial, request)?;
+        self.exchange_n1(id, plain, uplink, initial)
+    }
+    fn exchange_n1(
+        &mut self,
+        id: u32,
+        plain: Vec<u8>,
+        uplink: bool,
+        initial: bool,
+    ) -> Result<Vec<u8>, String> {
         let wire = self
             .registrations
             .get_mut(&id)
@@ -669,6 +708,18 @@ impl<T: Transport> Engine<T> {
             &wire,
             "NAS",
         );
+        if initial {
+            crate::session::validate_selection(
+                &decoded,
+                &self
+                    .scenario
+                    .ues
+                    .iter()
+                    .find(|u| u.id == id)
+                    .ok_or("Unknown UE")?
+                    .session,
+            )?;
+        }
         let sm = crate::session::unwrap_n1(&decoded, uplink)?;
         self.log(
             id,
@@ -691,7 +742,7 @@ impl<T: Transport> Engine<T> {
         );
         Ok(sm)
     }
-    /// One IPv4/SST1/DNN lab session per UE, atomically run at current virtual time.
+    /// One IPv4 session per UE, atomically run at current virtual time.
     pub fn establish_session(&mut self, id: u32) -> Result<(), String> {
         if self.ues.get(&id).map(|u| &u.state) != Some(&UeState::Registered) {
             return Err("Register the UE first".into());
@@ -699,28 +750,98 @@ impl<T: Transport> Engine<T> {
         if self.sessions.get(&id).is_some_and(|s| s.active) {
             return Err("Session already active".into());
         }
-        if self.next_session_slot > 254 {
-            return Err("Laboratory IP pool exhausted; reset experiment".into());
+        if let Some(f) = self.session_failures.get(&id) {
+            if f.retry_at_ms.is_none_or(|at| self.time_ms < at) {
+                return Err(format!("Session retry blocked: {}", f.reason));
+            }
         }
-        let mut s = crate::session::Session::new(id, self.next_session_slot);
+        let request = self
+            .scenario
+            .ues
+            .iter()
+            .find(|u| u.id == id)
+            .unwrap()
+            .session
+            .clone();
         let sm = self.session_nas(id, crate::session::request()?, true, true)?;
         if sm != crate::session::request()? {
             return Err("Unsupported SMF request".into());
         }
-        let plain = crate::session::n1(crate::session::accept(s.ip)?, false, false)?;
+        let policy = self
+            .scenario
+            .session_policies
+            .iter()
+            .find(|p| p.request == request);
+        if policy.is_none() {
+            // TS 24.501 5.4.5.3: return unforwarded SM payload, 5GMM cause 91.
+            let mut dl = crate::session::n1(sm, false, false, &request)?;
+            dl.extend([0x58, 91]);
+            self.exchange_n1(id, crate::session::nas(dl)?, false, false)?;
+            self.session_failures.insert(
+                id,
+                SessionFailure {
+                    domain: "5GMM".into(),
+                    cause: 91,
+                    reason:
+                        "DNN not supported or not subscribed in the slice; reset to change service"
+                            .into(),
+                    retry_at_ms: None,
+                },
+            );
+            return Ok(());
+        }
+        let count = self
+            .sessions
+            .values()
+            .filter(|s| {
+                s.active
+                    && s.dnn == request.dnn
+                    && s.sst == request.snssai.sst
+                    && s.sd == request.snssai.sd
+            })
+            .count();
+        if count >= policy.unwrap().max_sessions as usize || self.next_session_slot > 254 {
+            // 5GSM cause 26; T3396 = 5 x 2 seconds (GPRS timer 3 unit 011).
+            self.session_nas(
+                id,
+                crate::session::nas(vec![0x2e, 1, 1, 0xc3, 26, 0x37, 1, 0x65])?,
+                false,
+                false,
+            )?;
+            self.session_failures.insert(
+                id,
+                SessionFailure {
+                    domain: "5GSM".into(),
+                    cause: 26,
+                    reason: "Insufficient resources; T3396 10 seconds".into(),
+                    retry_at_ms: Some(self.time_ms + 10000),
+                },
+            );
+            return Ok(());
+        }
+        let mut s = crate::session::Session::new(id, self.next_session_slot, &request);
+        let plain = crate::session::n1(
+            crate::session::accept(s.ip, &request)?,
+            false,
+            false,
+            &request,
+        )?;
         let protected = self
             .registrations
             .get_mut(&id)
             .unwrap()
             .protect_session(plain, false)?;
-        let n2 = crate::session::setup(id, s.uplink_teid, protected)?;
-        let wire = crate::session::decode_setup(&n2, id, s.uplink_teid)?;
+        let n2 = crate::session::setup(id, s.uplink_teid, protected, &request.snssai)?;
+        let wire = crate::session::decode_setup(&n2, id, s.uplink_teid, &request.snssai)?;
         self.log(
             id,
             "AMF / SMF".into(),
             "gNodeB".into(),
             "PDUSessionResourceSetupRequest".into(),
-            format!("Session 1; SST 1; QFI 1; 5QI 9; UL TEID {}", s.uplink_teid),
+            format!(
+                "Session 1; DNN {}; S-NSSAI {:?}; QFI 1; 5QI 9; UL TEID {}",
+                request.dnn, request.snssai, s.uplink_teid
+            ),
             &n2,
             "NGAP",
         );
@@ -741,7 +862,7 @@ impl<T: Transport> Engine<T> {
             .unwrap()
             .receive_session(&wire, false)?;
         let sm = crate::session::unwrap_n1(&plain, false)?;
-        if sm != crate::session::accept(s.ip)? {
+        if sm != crate::session::accept(s.ip, &request)? {
             return Err("UE session accept mismatch".into());
         }
         let detail = oxirush_nas::nas_5gs::decode_nas_5gs_message(&sm)
@@ -765,6 +886,7 @@ impl<T: Transport> Engine<T> {
             &sm,
             "5GSM",
         );
+        self.session_failures.remove(&id);
         s.active = true;
         self.sessions.insert(id, s);
         self.next_session_slot += 1;
@@ -858,6 +980,7 @@ impl<T: Transport> Engine<T> {
         }
         self.registrations.get_mut(&id).unwrap().clear();
         self.amf.remove(&id);
+        self.session_failures.remove(&id);
         self.ues.get_mut(&id).unwrap().state = UeState::Deregistered;
         Ok(())
     }
@@ -1077,7 +1200,12 @@ impl<T: Transport> Engine<T> {
         Snapshot {
             time_ms: self.time_ms,
             started: self.started,
-            pending: self.transport.pending()
+            pending: self
+                .session_failures
+                .values()
+                .filter(|f| f.retry_at_ms.is_some_and(|at| at > self.time_ms))
+                .count()
+                + self.transport.pending()
                 + usize::from(self.has_mobility())
                 + usize::from(
                     self.started
@@ -1098,6 +1226,7 @@ impl<T: Transport> Engine<T> {
             events: self.events.clone(),
             coverage: self.coverage.clone(),
             sessions: self.sessions.values().cloned().collect(),
+            session_failures: self.session_failures.clone(),
             event_limit_reached: self.events.len() >= 16384,
         }
     }
@@ -1155,6 +1284,7 @@ mod tests {
     fn concurrent_ues_keep_cell_relaying_until_last_delivery() {
         let mut s = scenario();
         s.ues.push(Ue {
+            session: Default::default(),
             mobility: Default::default(),
             fault: LabFault::None,
             id: 3,

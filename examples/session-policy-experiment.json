@@ -1,0 +1,161 @@
+{
+  "format": "ranterra-experiment",
+  "version": 1,
+  "engine_profile": "ranterra-lab/2",
+  "scenario": {
+    "session_policies": [
+      {
+        "request": {
+          "dnn": "research.example",
+          "snssai": {
+            "sst": 2,
+            "sd": [
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        "max_sessions": 1
+      }
+    ],
+    "version": 2,
+    "radio": {
+      "model": "Legacy",
+      "shadow_fading": false,
+      "coverage_dbm": -120.0,
+      "hysteresis_db": 3.0,
+      "time_to_trigger_ms": 320,
+      "duration_ms": 10000
+    },
+    "name": "Service policy, backoff and replay",
+    "seed": 42,
+    "center": [
+      2.3639,
+      48.8674
+    ],
+    "gnodebs": [
+      {
+        "id": 1,
+        "name": "Lab gNodeB",
+        "lon": 2.3639,
+        "lat": 48.8674,
+        "frequency_mhz": 3500.0,
+        "tx_power_dbm": 46.0,
+        "height_m": 25.0,
+        "gain_dbi": 16.0,
+        "antenna": {
+          "sector": false,
+          "azimuth_deg": 0.0,
+          "downtilt_deg": 0.0,
+          "resource_blocks": 106,
+          "numerology": 1
+        }
+      }
+    ],
+    "ues": [
+      {
+        "session": {
+          "dnn": "research.example",
+          "snssai": {
+            "sst": 2,
+            "sd": [
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        "fault": "None",
+        "mobility": {
+          "waypoints": [],
+          "speed_mps": 0.0
+        },
+        "id": 101,
+        "name": "Lab UE",
+        "lon": 2.3645,
+        "lat": 48.8674
+      },
+      {
+        "session": {
+          "dnn": "research.example",
+          "snssai": {
+            "sst": 2,
+            "sd": [
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        "fault": "None",
+        "mobility": {
+          "waypoints": [],
+          "speed_mps": 0.0
+        },
+        "id": 102,
+        "name": "Second lab UE",
+        "lon": 2.3645,
+        "lat": 48.8674
+      }
+    ],
+    "buildings": []
+  },
+  "commands": [
+    {
+      "time_ms": 1000,
+      "action": {
+        "type": "establish",
+        "ue_id": 101
+      }
+    },
+    {
+      "time_ms": 1000,
+      "action": {
+        "type": "establish",
+        "ue_id": 102
+      }
+    },
+    {
+      "time_ms": 1000,
+      "action": {
+        "type": "echo",
+        "ue_id": 101,
+        "loss_percent": 0
+      }
+    },
+    {
+      "time_ms": 1100,
+      "action": {
+        "type": "release",
+        "ue_id": 101
+      }
+    },
+    {
+      "time_ms": 11000,
+      "action": {
+        "type": "establish",
+        "ue_id": 102
+      }
+    },
+    {
+      "time_ms": 11000,
+      "action": {
+        "type": "echo",
+        "ue_id": 102,
+        "loss_percent": 100
+      }
+    },
+    {
+      "time_ms": 11000,
+      "action": {
+        "type": "echo",
+        "ue_id": 102,
+        "loss_percent": 0
+      }
+    }
+  ],
+  "time_ms": 11100,
+  "started": true,
+  "state_digest": "49a3c29bad886b983e6614007f2441a8583491c1d4de939724df4532cb89821e"
+}

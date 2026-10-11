@@ -1,0 +1,50 @@
+[
+  {
+    "name": "github.com/free5gc/aper",
+    "version": "v1.0.6-0.20250102035630-3ddc831eed6a",
+    "license": "Apache-2.0",
+    "notice": "notices/github.com_free5gc_aper.txt",
+    "source_license_file": "LICENSE.txt",
+    "sha256": "ed127da2459a21616a5b84450ed3b77a68468db5758592bdfbf5f0008f90a925"
+  },
+  {
+    "name": "github.com/free5gc/nas",
+    "version": "v1.1.5",
+    "license": "Apache-2.0",
+    "notice": "notices/github.com_free5gc_nas.txt",
+    "source_license_file": "LICENSE.txt",
+    "sha256": "ed127da2459a21616a5b84450ed3b77a68468db5758592bdfbf5f0008f90a925"
+  },
+  {
+    "name": "github.com/free5gc/ngap",
+    "version": "v1.0.10",
+    "license": "Apache-2.0",
+    "notice": "notices/github.com_free5gc_ngap.txt",
+    "source_license_file": "LICENSE.txt",
+    "sha256": "ed127da2459a21616a5b84450ed3b77a68468db5758592bdfbf5f0008f90a925"
+  },
+  {
+    "name": "github.com/sirupsen/logrus",
+    "version": "v1.9.3",
+    "license": "MIT",
+    "notice": "notices/github.com_sirupsen_logrus.txt",
+    "source_license_file": "LICENSE",
+    "sha256": "51a0c9ec7f8b7634181b8d4c03e5b5d204ac21d6e72f46c313973424664b2e6b"
+  },
+  {
+    "name": "github.com/tim-ywliu/nested-logrus-formatter",
+    "version": "v1.3.2",
+    "license": "MIT",
+    "notice": "notices/github.com_tim-ywliu_nested-logrus-formatter.txt",
+    "source_license_file": "LICENSE",
+    "sha256": "9a0424d085507beac6c23658b7ffc608c69379b8ca6c65c6eb6c36d719df521e"
+  },
+  {
+    "name": "golang.org/x/sys",
+    "version": "v0.28.0",
+    "license": "BSD-3-Clause",
+    "notice": "notices/golang.org_x_sys.txt",
+    "source_license_file": "LICENSE",
+    "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+  }
+]

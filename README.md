@@ -30,12 +30,12 @@ Open http://127.0.0.1:4173. This verification server serves **only static `dist/
 
 1. Import `examples/minimal.json`, or use the Paris demo. The current demo selects UMa; old version-1 files without a radio configuration preserve the legacy model.
 2. Run at 10× playback, then select a UE. REGISTERED appears only after authenticated, integrity-protected Registration Complete reaches the AMF.
-3. Establish PDU session, send echo, then release session. The lab uses IPv4, DNN `lab`, SST 1 and QFI 1. Packets target virtual `10.45.255.1`, never the internet.
+3. Establish PDU session, send echo, then release session. The default service is IPv4, DNN `lab`, SST 1 and QFI 1; **Session policies** configures DNN/SST/optional SD and capacity, with per-UE requests in the inspector. Packets target virtual `10.45.255.1`, never the internet.
 4. Inspect NAS, NGAP, 5GSM, GTP-U and IPv4 events. Protected NAS rows show verified decoded content alongside original ciphertext. The gNodeB only relays NAS ciphertext.
 5. Use **Deregister UE** for protected NAS deregistration and logical N2 context release. Reset before registering again.
 6. Draw a trajectory by clicking map waypoints, choose speed in m/s, and finish the trajectory. Movement runs in 100 ms virtual ticks for the configured duration. A3-style changes are **reassociation, not protocol handover**. Reassociation invalidates the old registration/session; reset is needed to reconnect.
 7. Select a laboratory fault to reproduce authentication failures. Each UE has independent contexts. No real subscriber credential import is supported.
-8. Export scenario, event log, or results. Results include metrics in JSON and per-UE CSV. Save copy stores named scenarios locally; browser persistence is not a portable backup.
+8. Export scenario, event log, or results. In Results, **Export experiment / Save run** capture the timestamped Rust command journal and current virtual-time checkpoint. Import or **Restore saved run** reconstructs active sessions and in-flight packets without exporting keys. **Compare experiment** replays another run for comparison. Save copy still stores initial configuration.
 
 Start/pause/resume/step/reset, seeds, playback speed, duration, coverage layers, cell/UE configuration, and geographic navigation remain in the existing workspace. Scenario edits reset execution transactionally. The latest 500 filtered timeline rows are rendered; exports retain the bounded full history (16,384 rows), with an explicit limit indicator.
 
@@ -44,12 +44,12 @@ Start/pause/resume/step/reset, seeds, playback speed, duration, coverage layers,
 - Synthetic null-scheme SUCI and subscriber provisioning; MILENAGE AUTN/SQN verification, RES*/XRES* and HRES*/HXRES*, KAUSF/KSEAF/KAMF/NAS keys.
 - NIA2/NEA2 NAS security, independent directional COUNTs, Security Mode capability replay and initial NAS container verification, Registration Accept/Complete, failure isolation, lab timeout and deregistration.
 - Real OxiRush NAS/NGAP codecs; InitialUEMessage, UL/DLNASTransport, PDU resource setup/release and UE context release.
-- One IPv4 PDU session per UE, protected N1 SM transport, local SMF/UPF control, distinct directional TEIDs, IPv4/ICMP echo, GTP-U validation and per-session traffic statistics.
+- Configurable DNN/S-NSSAI (SST + optional SD), per-policy capacity and protected rejects/backoff; one IPv4 PDU session per UE, protected N1 SM transport, local SMF/UPF control, distinct directional TEIDs, IPv4/ICMP echo, GTP-U validation and per-session traffic statistics.
 - UMi/UMa LOS/NLOS path loss from TR 38.901 v18.0.0 within explicitly enforced ranges, optional sector pattern and seeded shadowing, thermal noise and full-load co-channel SINR.
 - Deterministic waypoint mobility, coverage loss and configurable A3 hysteresis/TTT in scenario radio configuration.
 - Native execution, WASM execution, production worker tests, Chromium/Firefox automation, input bounds, provider configuration, static hosting headers, CI and dependency/license checks.
 
-Important reductions: no RRC/AS security/PHY, NG setup or real SCTP/UDP; no PFCP (SMF/UPF control is collocated); fixed DNN/slice/session profile; no NAS timer retransmissions or AUTS resynchronization; no protocol handover, automatic reconnection, terrain or height-aware building RF. Session control/deregistration are atomic at the current virtual time; echo uses scheduled virtual delays. These are material limits, not transparent substitutes for omitted protocol functionality.
+Important reductions: no RRC/AS security/PHY, NG setup or real SCTP/UDP; no PFCP (SMF/UPF control is collocated); one IPv4 session per UE with fixed QFI/5QI; no NAS timer retransmissions or AUTS resynchronization; no protocol handover, automatic reconnection, terrain or height-aware building RF. Session control/deregistration are atomic at the current virtual time; echo uses scheduled virtual delays. These are material limits, not transparent substitutes for omitted protocol functionality.
 
 ## Verification
 
@@ -61,6 +61,9 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 npx playwright install chromium firefox
 npm run test:browser
+npm run test:replay
+# Independent codec validator additionally requires Go 1.27.2 (validation toolchain only):
+npm run test:protocols
 npm audit --audit-level=moderate
 cargo install cargo-audit --version 0.22.2 --locked
 cargo audit
@@ -70,7 +73,7 @@ npm run benchmark:wasm
 node scripts/verify-build.mjs
 ```
 
-`npm test` runs native Rust, actual WASM, and the built worker. Build first. Browser tests run production assets under CSP and block external geographic traffic; they do not mock the protocol engine. The GitHub workflow additionally compares two build manifests and verifies the independent KDF fixtures.
+`npm test` runs native Rust, actual WASM, and the built worker. Build first. Browser tests run production assets under CSP and block external geographic traffic; they do not mock the protocol engine. The GitHub workflow additionally compares build manifests, verifies KDF fixtures and runs the standalone free5GC codec validator. No Go code is linked into the browser application. Replay is verified in both directions between native Rust and WASM.
 
 Native example:
 

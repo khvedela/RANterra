@@ -1,0 +1,14 @@
+# Independent protocol validation
+
+Run `npm run test:protocols` from the repository root with Go 1.27.2 (validation toolchain only) and Rust installed. This emits endpoint plaintext NAS and actual NGAP frames using the engine, then passes them to the separately implemented [free5GC NAS](https://github.com/free5gc/nas/tree/v1.1.5) and [NGAP](https://github.com/free5gc/ngap/tree/v1.0.10) codecs. The versions and transitive dependencies are pinned in go.mod/go.sum.
+
+Thirty frames cover initial registration/authentication/security/accept/complete, UL/DL N1 with a multi-label DNN and SST/SD, PDU resource setup/response/release, 5GSM accept/reject/release, unforwarded-payload cause 91 and N2 UE context release. Every decoded frame must re-encode byte-for-byte. The setup request transfer is also independently APER decoded/re-encoded; its tunnel, session type, QoS list and session-AMBR IEs must be present. No sockets, external core, service credentials or deployment are used.
+
+This caught OxiRush 0.4.2's macro mapping `RRCEstablishmentCause` to IE 237 instead of 90. The application's explicit adapter fixes this and a native regression test locks the required IE ID. The non-GBR setup now includes the N2 session-AMBR IE matching the NAS 1 Mbit/s profile. Rate enforcement remains outside the user-plane model.
+
+This validates message encoding with independent libraries. It is not a full independent state-machine, security-decryption, live SCTP interoperability or 3GPP conformance test. The plaintext NAS frames are obtained after the Rust endpoints verify/decrypt their wire frames; original encrypted frames remain visible in the application.
+
+The validator is a separate local/CI executable, never compiled into browser assets. Its six linked dependencies are Apache-2.0, MIT or BSD-3-Clause. Reviewed versions and license hashes are in LICENSES.json, with notices retained under notices/. `python3 scripts/check-validation-licenses.py` checks the actual linked module graph and notice hashes. No AGPL/GPL implementation source is incorporated into RANterra.
+
+
+Validation-only audit exception: [GO-2022-1083](https://pkg.go.dev/vuln/GO-2022-1083) reports malformed-input panics in free5GC APER, with no fixed release listed. The checker consumes only the 30 locally generated bounded fixtures in a separate process, has no network listener, and turns panics into controlled test failures. Do not use this validator to serve or ingest arbitrary uploaded traffic. It is absent from browser/native application dependencies. `python3 scripts/audit-validation.py` pins Go 1.27.2 and govulncheck 1.9.0, retains the JSON audit, reports this exception visibly and fails on any additional reachable advisory. The initial system-Go 1.23.2 scan also found a standard-library advisory; the pinned 1.27.2 scan removed that finding. This validation tool is not represented as vulnerability-free.

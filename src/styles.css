@@ -1740,3 +1740,34 @@ select {
 .entity-row small {
   color: #536347;
 }
+
+.session-fields {
+  border: 1px solid var(--border, #dbe3d5);
+  border-radius: 6px;
+  padding: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.session-fields legend {
+  font-size: 11px;
+}
+.session-fields label {
+  display: block;
+  margin: 8px 0;
+}
+.session-fields input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+.session-policy-modal {
+  max-width: 780px;
+}
+.session-policy-modal input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.session-policy-modal th {
+  font-size: 12px;
+}

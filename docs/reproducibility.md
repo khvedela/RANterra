@@ -1,27 +1,47 @@
-# Reproducing experiments
+# Deterministic experiments and portable replay
 
-Use a pinned source revision, both lockfiles, the documented toolchain, the same version-1 scenario JSON, seed, and the same commands at the same virtual times. The scheduler orders events by delivery time then insertion order. Mobility ticks are independent of caller step size. Native, actual WASM and production-worker tests exercise deterministic replay.
+The application now uses a Rust-owned `Experiment` boundary. It journals every successful state-changing session command at the exact engine virtual time: establishment (including a protocol rejection), echo with loss percentage, release and deregistration. Commands sharing a timestamp keep insertion order. Failed local commands are rolled back and excluded. Scenario edits/reset begin a new run; each recording contains that run's complete initial configuration.
 
-1. Import `examples/minimal.json` for static registration, `examples/research-mobility.json` for UMa movement, or `examples/authentication-failures.json` for isolated negative cases. The bundled Paris scenario includes OSM geometry and provenance; it avoids a live geography fetch changing the experiment.
-2. Choose the radio model explicitly. Start or step the simulation. Speed controls change wall-clock pacing only; displayed protocol timestamps and echo latency are virtual milliseconds.
-3. After registration, establish a session from the UE inspector and send an echo. Continue execution to deliver queued packets, then release the session or deregister. Record command timing if repeating this interactive experiment.
-4. Save a named local copy or export scenario JSON. Export the bounded event log and JSON/CSV results separately. Results include units and model/scenario metadata. Compare exports externally; the UI provides a current-run dashboard, not a complete comparative-run database.
+## Workflow
 
-Scenario imports are validated in Rust before replacing the active engine. Unknown fields, including credentials, unsupported versions and excessive geometry are rejected. Optional new version-1 fields have explicit defaults, so old version-1 files still load. A future version-2 migration has not been implemented; future versions currently fail with a descriptive error. Named copies are bounded to 50; geometry cache entries to 100.
+1. Import a scenario, configure network session policies and each UE's DNN/S-NSSAI, then run registration. Pause/step/speed affect wall-clock pacing only.
+2. Establish sessions and send packets. Echo loss is a deterministic explicit percentage, independent of the RF approximation.
+3. In Results, **Export experiment** downloads a portable checkpoint; **Save run** stores one local checkpoint. Both pause playback at the checkpoint boundary. **Restore saved run** reconstructs that checkpoint, including active sessions, counters, timers and in-flight packets. Ordinary Save copy/Export still operate on initial scenario configuration.
+4. Use Import for a scenario or an exported experiment. Experiment import replays and checks its digest before replacing the active engine. A malformed, incompatible or altered recording cannot replace it. Resume from the reconstructed state normally.
+5. **Compare experiment** independently replays an imported checkpoint and compares virtual time, registered UEs, delivered and dropped echo packets with the current run. It does not replace the current engine.
 
-Scenario files store configuration, not secret contexts, active IP sessions or an executable journal of manual commands. Loading or worker recovery restarts the experiment at time zero. Event/results exports cannot currently restore an interactive session or replay all manual actions automatically. This is a remaining v1 release gate. Seeded automatic registration and movement are reproducible without those manual actions.
+Try `examples/session-policy-experiment.json`: two UEs request research.example / SST 2 / SD 010203, capacity is one; one rejection/backoff and later successful retry, release, delivered traffic and injected loss are already recorded. The restored second UE has an active session. `cargo run --quiet --locked -p ranterra-engine --example reference_experiment` regenerates the file.
 
-Logs are capped at 16,384 events and the UI shows the latest 500. The UI reports trace truncation. Simulation continues after the cap; export does not invent missing events. Split large experiments or reset before recording another run. No real subscriber keys belong in scenarios, logs or browser storage.
+## Format and migration
 
-Build reproducibility check (same machine/toolchain):
+Scenario schema **2** adds network service policies and per-UE requests. Version-1 input migrates deterministically using explicit defaults: lab / SST 1 / no SD / 128 active sessions; absent RF configuration keeps the legacy model. Both versions are validated; unknown fields/versions fail. Canonical exports use version 2. IndexedDB upgrades from schema 1 to 2 by preserving existing scenario/cache stores and adding the run store.
+
+Experiment format **1**, `format: ranterra-experiment`, carries `engine_profile: ranterra-lab/2`, canonical scenario, ordered timestamped typed commands, checkpoint time, started flag and a SHA-256 state digest. It contains no exported security contexts or keys. Replay derives the same synthetic lab credentials and reconstructs both endpoints, COUNTs, SQNs, allocator and transport queue. This is deterministic reconstruction, not secret-memory serialization.
+
+The digest covers exact protocol/event history, state transitions, cell association, session/counter/failure state, pending work and virtual time. Floating-point radio observations are excluded because final bits may vary by runtime. The digest detects incompatibility/corruption; it is not a signature or authenticity guarantee. The profile must match exactly. New protocol behavior requires a profile revision or an explicit future replay migration, never silent reinterpretation.
+
+Pause/resume/playback speed are not journal entries because they do not alter virtual state. Reset and configuration edits define a new experiment. The checkpoint does not restore UI selection, open panels or real-time pacing. For bounded core operations it restores the supported engine state and permits deterministic continuation, including packets that had not arrived at export time.
+
+Limits: 2 MB scenario JSON, 4 MB recording, 4,096 commands, one hour virtual time; 16 cells/128 UEs and the existing geometry limits apply. The journal refuses new actions when full rather than truncating them. Traces still cap at 16,384 events with an explicit UI warning; replay reconstructs state even when the visible event history is capped. Browser history and local storage are not backups; export checkpoints for portability. Real subscriber credentials are prohibited.
+
+## Native replay and checks
+
+```sh
+cargo run --locked -p ranterra-engine --example experiment -- examples/session-policy-experiment.json
+# Restore, advance 100 virtual ms, export a new checkpoint:
+cargo run --locked -p ranterra-engine --example experiment -- examples/session-policy-experiment.json 100 /tmp/continued-experiment.json
+npm test
+npm run test:replay
+npm run test:protocols
+```
+
+Tests cover checkpoints across registration stages, concurrent service selection/backoff, same-time commands, active sessions, in-flight traffic, explicit loss, release/deregistration, malformed ordering/limits/digest, failed-command rollback, mobility/timeout step invariance, and native→WASM→native continuation. Browser tests cover actual worker persistence, import, comparison and corrupted-run isolation.
+
+Build-byte reproducibility remains a separate check:
 
 ```sh
 npm run build
 node scripts/verify-build.mjs
 npm run build
 node scripts/verify-build.mjs --compare
-python3 scripts/generate-kdf-vectors.py > /tmp/ranterra-kdf.json
-diff engine/tests/kdf-vectors.json /tmp/ranterra-kdf.json
 ```
-
-This checks asset bytes and independently derived cryptographic fixtures. It is not a claim of cross-platform bit-identical native binaries or deterministic transcendental arithmetic on every CPU/runtime.

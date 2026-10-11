@@ -31,5 +31,20 @@
     "reload_roundtrip_max_ms": 57.344416,
     "sampled_process_rss_bytes": 492797952
   },
-  "limits": "Not browser peak memory, paint latency, cross-machine SLA or RF calibration."
+  "limits": "Not browser peak memory, paint latency, cross-machine SLA or RF calibration.",
+  "policy_replay_followup": {
+    "wasm_node": {
+      "rf_median_ms": 54.198542,
+      "rf_max_ms": 90.941125,
+      "registration_median_ms": 20.245084,
+      "linear_memory_bytes": 6356992,
+      "sampled_process_rss_bytes": 519127040,
+      "snapshot_bytes": 1038013
+    },
+    "worker_node": {
+      "reload_roundtrip_median_ms": 58.96975,
+      "reload_roundtrip_max_ms": 70.682667,
+      "sampled_process_rss_bytes": 289144832
+    }
+  }
 }

@@ -4,6 +4,19 @@ Date: 2026-10-11. Candidate: **1.0.0-rc.1**, intended stable version **1.0.0**. 
 
 The existing prototype has been extended into a functioning browser-only authenticated registration and virtual data-plane application. This is a substantial implementation, with genuine encoded protocols and cryptography, but several requested release gates remain incomplete. The status below distinguishes implemented narrow support from missing requirements.
 
+
+## Follow-up implementation: policies, replay and independent validation
+
+The configurable-policy and portable-replay blockers are now implemented for the supported single-session IPv4 model:
+
+- Up to eight validated DNN/S-NSSAI pairs (SST and optional SD), per-UE requested service, per-policy active-session capacity and browser forms. NAS Registration Accept, N1 selection, SM accept and N2 setup carry the configured slice/service. AMF rejection uses protected unforwarded N1 / 5GMM cause 91; resource rejection uses genuine 5GSM cause 26 with a 10-second virtual T3396 backoff. Rejects allocate no IP/TEID; backoff and successful retry are tested.
+- Rust-owned ordered command journal, format/profile validation, SHA-256 exact-state compatibility check, candidate replay before commit, and failed-command rollback. Export/import and explicit IndexedDB run checkpoints restore registration/security progression, active sessions, counters, allocator state, pending packets, timers and deterministic continuation without serialized keys. Scenario v1→v2 and IndexedDB v1→v2 migrations preserve existing data. Portable comparison replays another run without replacing the active run.
+- Native↔WASM replay cross-check passes with custom policy, in-flight packet, loss, continued traffic, release and deregistration. The timeout event is now scheduled at 6,000 ms even when mobility crosses it in a large step; unchanged velocity input no longer resets execution and playback speed survives scenario replacement.
+- Independent free5GC codecs decode/re-encode 30 NAS/NGAP frames exactly and verify the inner N2 setup transfer. This caught OxiRush 0.4.2's erroneous RRC establishment-cause IE ID 237; an explicit adapter now emits standard ID 90. Non-GBR N2 setup now includes session-AMBR matching the NAS profile.
+- Sixteen published ns-3.47 numerical path-loss reference points match within 0.0001 dB, plus breakpoint/frequency-edge checks. These are external numerical reference checks, not a drive-test calibration or live ns-3 run.
+
+See [replay workflow](reproducibility.md), [independent validator](../validation/free5gc/README.md) and [RF references](radio-validation.md). New standalone validator dependencies are isolated from browser assets and have retained Apache-2.0/MIT/BSD-3-Clause notices. No new runtime dependencies or external deployment were introduced.
+
 ## Implemented features
 
 - Synthetic subscriber provisioning, null-scheme SUCI identity validation, MILENAGE AUTN/SQN verification, RES*/XRES* and HRES*/HXRES* checks, 5G key derivation, independent UE/AMF NIA2/NEA2 security contexts and UL/DL counters.
@@ -48,14 +61,19 @@ Before edits, the existing 14 Rust tests, actual WASM runtime and production-wor
 
 | Check actually run locally | Result |
 |---|---|
-| Native Rust unit tests | 31 passed |
+| Native Rust unit tests | 32 passed |
 | Cryptographic integration tests | 3 passed: MILENAGE also covered in unit suite; NEA2, NIA2, independent KDF fixtures here |
+| Replay/policy integration tests | 9 passed, including checked-in portable run |
+| RF reference integration tests | 2 passed, covering 16 external points and boundaries |
+| Independent codec check | 30 NAS/NGAP frames byte-exact through free5GC |
+| Native↔WASM replay | Custom policy and stateful continuation verified |
 | WASM release compilation and actual runtime | Passed; registration/session/echo/release/deregistration and deterministic replay |
 | Production-worker execution | Passed; offline WASM, ordering, pause/resume/reset, stale revisions, invalid-load rollback, session/traffic |
-| Chromium + Firefox production-browser suite | 8 passed (4 per browser), real WASM/worker, CSP/static output |
+| Chromium + Firefox production-browser suite | 14 passed (7 per browser), including run persistence/migration/quota recovery |
 | TypeScript / Vite production build | Passed |
 | ESLint / rustfmt / Clippy with warnings denied | Passed |
 | Python independent KDF fixture regeneration | Passed byte comparison |
+| Standalone Go validator audit | One documented isolated-tool exception: GO-2022-1083; any new reachable finding fails the added audit |
 | npm vulnerability audit | 0 known vulnerabilities |
 | cargo vulnerability audit | No known vulnerabilities; unmaintained `paste` warning RUSTSEC-2024-0436 remains |
 | Locked dependency/license inventory | 417 packages reviewed by allowlisted expressions; no AGPL integrated |
@@ -73,9 +91,9 @@ No claim of complete 3GPP compliance, live UERANSIM/Open5GS interoperability, ca
 
 ## RF validation and benchmarks
 
-TR 38.901 **18.0.0**, Table 7.4.1-1 subset. At 100 m horizontal separation and 3.5 GHz, LOS reference fixtures are UMi **85.314188 dB** and UMa **83.1381567 dB**. Tests check domain rejection, NLOS ordering, antenna direction, deterministic shadowing, interference, motion and reassociation. Missing footprint data assumes LOS; no terrain/material/height model or correlated fading is claimed. See [RF assumptions](radio-validation.md). Independent measured/RF-tool comparison is still missing.
+TR 38.901 **18.0.0**, Table 7.4.1-1 subset. At 100 m horizontal separation and 3.5 GHz, LOS reference fixtures are UMi **85.314188 dB** and UMa **83.1381567 dB**. Tests check domain rejection, NLOS ordering, antenna direction, deterministic shadowing, interference, motion and reassociation. Missing footprint data assumes LOS; no terrain/material/height model or correlated fading is claimed. See [RF assumptions](radio-validation.md). Independent numerical comparison with published ns-3.47 reference points now passes; measured calibration/live RF-tool execution is still absent.
 
-Measured locally on Apple M3 Pro, arm64 macOS (native benchmark: installed Rust 1.96.1; WASM: pinned Rust 1.97.1 / Node 24.18.0), 10 runs, **16 gNodeBs / 128 UEs / 467 buildings / 1,225 grid samples**, UMa:
+Earlier candidate benchmark, retained for comparison. Measured locally on Apple M3 Pro, arm64 macOS (native benchmark: installed Rust 1.96.1; WASM: pinned Rust 1.97.1 / Node 24.18.0), 10 runs, **16 gNodeBs / 128 UEs / 467 buildings / 1,225 grid samples**, UMa:
 
 | Metric | Native release | Actual WASM in Node 24 |
 |---|---:|---:|
@@ -88,6 +106,8 @@ Measured locally on Apple M3 Pro, arm64 macOS (native benchmark: installed Rust 
 
 Native RSS came from `/usr/bin/time -l`; Node RSS includes the host, JIT, modules and runtime and is not WASM linear memory or peak browser-tab memory. RF numbers measure initialization including scenario validation and grid computation. They are wall-clock timings, not virtual network latency. Concurrent system activity affected the WASM maximum. Browser rendering latency and full browser-tab peak memory are not established by this benchmark. Worker reload round trips (validation + RF + serialization + transfer, ten runs) measured **48.32 ms median / 57.34 ms maximum** in the Node worker host; sampled whole-process RSS was 492.80 MB. This does not measure browser painting.
 
+Follow-up measured results on the same bounded workload: WASM RF median **54.20 ms**, max **90.94 ms**, registration median **20.25 ms**, linear memory **6.36 MB** (sampled Node RSS 519.13 MB). Worker reload median **58.97 ms**, max **70.68 ms** (sampled process RSS 289.14 MB). No silent fidelity changes; the bounded regression budgets pass. Different whole-process RSS samples are not a reliable memory-leak trend.
+
 Commands: `npm run benchmark`, `npm run benchmark:wasm`, `node scripts/test-worker.mjs --benchmark`. The WASM regression guard checks <64 MiB linear memory and <5 s initialization for this bounded workload; this is a safety budget, not a real-time SLA. Editing rebuilds the grid; motion updates only UE links. No fidelity is silently reduced under load.
 
 ## Acceptance gates and remaining work
@@ -97,20 +117,20 @@ Commands: `npm run benchmark`, `npm run benchmark:wasm`, `node scripts/test-work
 | Clean production static boot and browser WASM | PASS locally, production Chromium/Firefox |
 | Multiple independent authenticated registrations | PASS for documented laboratory subset |
 | Genuine NAS integrity/ciphering | PASS for NIA2/NEA2; known vectors, replay/tamper/count checks |
-| Establish/use/release a PDU session | PASS for fixed single-session IPv4 lab profile |
+| Establish/use/release a PDU session | PASS for configurable DNN/slice/capacity with one IPv4 session per UE |
 | Inspect actual protocol bytes | PASS within trace cap; no synthetic success substitution |
 | Movement affects RF and network state | PASS for waypoints/coverage loss/reassociation; protocol handover unsupported |
-| Scientific model validation/documentation | PARTIAL: equation checks pass; independent RF-tool/measurement comparison absent |
-| Save/restore/export/import/replay experiments | PARTIAL: scenario configuration and seeded automatic execution work; full command-journal and runtime/session restoration absent |
+| Scientific model validation/documentation | PASS for the bounded equations with independent published ns-3 numerical references; field calibration remains outside validated scope |
+| Save/restore/export/import/replay experiments | PASS for supported bounded engine actions: portable journal replay, checkpoints, migrations and active-state continuation |
 | Invalid inputs cannot corrupt active state | Covered by bounded schema, packet and transactional load tests; extensive fuzz/storage-quota proof absent |
-| Required automated coverage | PARTIAL: local suites pass; external protocol differential validation and some requested failure/migration/browser cases remain |
+| Required automated coverage | PARTIAL: local suites pass; independent codec validation added; full external state-machine interoperability and extended reliability cases remain |
 | Successful production deployment | NOT VERIFIED: local static deployment passes; no external hosting authorized/executed |
 | Visible limitations and honest scope | PASS: README, UI labels/help, protocol/RF/security documents |
 
 Remaining engineering priorities before claiming the requested v1.0:
 
-1. Configurable DNN/S-NSSAI, fuller session reject/failure handling and validation of mandatory message/IE combinations against an independent known-good registration/session trace. Add NAS retransmission/AUTS paths if claiming those procedures; current 6-second timeout is a lab deadline.
-2. An executable timestamped command journal, portable result/run comparison, tested future-schema migrations and complete experiment replay including interactive session actions.
+1. Independent full registration/session state-machine interoperability and broader failure/retransmission/AUTS coverage remain. Configurable DNN/S-NSSAI and capacity reject/backoff are now implemented; the registration timeout is still a laboratory deadline.
+2. Portable command replay, state reconstruction, comparison and version-1 migration now pass for supported actions. Remaining extensions include future engine-profile migrations, longer/cancelable replay jobs, multi-session/QoS expansion and richer comparative statistics. Current recording limits are explicit (4 MB, 4,096 commands, one hour).
 3. Broader RF reference checks/calibration, geometry-height support where data exists, measured browser rendering/memory budgets and improved incremental grid recomputation. Do not call current reassociation protocol handover or promise automatic reconnection.
 4. Complete applicable ASVS verification, extended malformed-packet fuzzing/soak/storage-failure coverage, track the unmaintained dependency, observe remote CI and verify a configured hosted deployment only after authorization.
 5. Richer measured controller objectives/observations and useful baseline policy integration remain future research work. Current traits/no-op baseline are foundations, not a trained controller or completed 6G platform.

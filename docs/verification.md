@@ -2,6 +2,22 @@
 
 This supersedes the MVP rejection-only verification record. It is evidence for a candidate, not standards certification. Stable v1.0 remains blocked; see [release report](V1_RELEASE_REPORT.md).
 
+## Follow-up validation
+
+The policy/replay follow-up suite comprises 32 unit tests + 9 replay/policy integration tests + 2 RF reference tests + 3 crypto integration tests (**46 Rust tests**). Actual WASM/production worker and native↔WASM portable replay pass. The external free5GC check decodes/re-encodes **30 NAS/NGAP frames** exactly, including the N2 request transfer and required AMBR. Sixteen external ns-3.47 numerical RF points pass at tolerance 0.0001 dB; ns-3 itself was not executed.
+
+Browser automation now includes 14 tests (7 per Chromium/Firefox): the earlier 8 plus custom DNN/SST/SD, explicit run persistence across page reload, exported replay/comparison, corrupted-recording isolation, policy resource rejection, IndexedDB-v1 migration and injected quota failure with usable export. All 14 passed in the final full browser run (52.9 seconds).
+
+The replay suite covers registration-stage checkpoints and deterministic continuation with active sessions and in-flight packets, same-time commands, rejected policy/backoff/retry, explicit loss, teardown, bounds, malformed ordering/digest/profile, command rollback and timeout/mobility step invariance. `examples/session-policy-experiment.json` is checked as an executable fixture.
+
+New checks: `npm run test:replay`, `npm run test:protocols`, `python3 scripts/check-validation-licenses.py`. Go 1.27.2 is pinned for the standalone independent validator only. Rust/npm runtime dependencies are unchanged. The six linked validator dependencies have explicit reviewed notices; the APER advisory is tracked in the validator documentation rather than concealed.
+
+Latest follow-up bounded workload (Apple M3 Pro, Node 24, 16 cells/128 UEs/467 buildings/1,225 samples, 10 runs): WASM RF initialization median **54.199 ms**, maximum **90.941 ms**, registration advance median **20.245 ms**, linear memory **6,356,992 bytes**, sampled Node RSS **519,127,040 bytes**. Worker reload round-trip median **58.970 ms**, max **70.683 ms**; sampled whole-process RSS **289,144,832 bytes**. These are wall-clock worker-host results, not virtual latency or browser peak memory. Regression budgets passed.
+
+Follow-up build checks: full Rust/WASM/TypeScript/Vite build, lint, rustfmt and Clippy with warnings denied passed; two complete production builds matched all 38 artifact hashes. The final policy-dialog presentation adjustment was checked with two byte-identical web builds and the relevant Chromium/Firefox workflow rerun. npm audit found zero known vulnerabilities; cargo audit retains the unmaintained paste warning. The pinned Go 1.27.2 / govulncheck 1.9.0 audit has only the explicit isolated APER advisory exception; the exception guard passed and retains raw JSON under test-results. No hosted deployment or publication was attempted.
+
+## Earlier candidate evidence (retained historical baseline)
+
 Baseline before edits: 14 native Rust tests plus actual WASM and production-worker tests passed.
 
 Final local implementation checks:

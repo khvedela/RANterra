@@ -13,13 +13,11 @@ test.beforeEach(async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Run simulation", exact: true }),
   ).toBeEnabled();
-  await page
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "minimal.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify(minimal)),
-    });
+  await page.locator("input[type=file]").setInputFiles({
+    name: "minimal.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(minimal)),
+  });
   await expect(page.getByLabel("Scenario name")).toHaveValue(minimal.name);
 });
 test("production boot, registration, secured session, offline echo and teardown", async ({
@@ -97,13 +95,11 @@ test("invalid subscriber, import rejection and saved scenario persistence", asyn
   await expect(
     page.getByRole("button", { name: "Establish PDU session", exact: true }),
   ).toBeDisabled();
-  await page
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "bad.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ ...minimal, version: 99 })),
-    });
+  await page.locator("input[type=file]").setInputFiles({
+    name: "bad.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ ...minimal, version: 99 })),
+  });
   await expect(page.getByRole("alert")).toContainText(
     "Unsupported scenario version",
   );
@@ -177,4 +173,233 @@ test("static hosting MIME, headers and route refresh", async ({ request }) => {
   const asset = await request.get(js!);
   expect(asset.headers()["cache-control"]).toContain("immutable");
   expect((await request.get("/missing.js")).status()).toBe(404);
+});
+
+test("configurable service, checkpoint persistence, import replay and comparison", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Session policies", exact: true })
+    .click();
+  await page.screenshot({ path: "test-results/session-policies.png" });
+  await page.getByLabel("Policy 1 DNN").fill("research.example");
+  await page.getByLabel("Policy 1 SST").fill("2");
+  await page.getByLabel("Policy 1 SD").fill("010203");
+  await page
+    .getByRole("button", { name: "Apply policies", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Apply policies", exact: true }),
+  ).toBeEnabled();
+  await page.getByLabel("Close policies").click();
+  await page
+    .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
+    .click();
+  await page.getByLabel("UE DNN").fill("research.example");
+  await page.getByLabel("UE DNN").press("Tab");
+  await expect(
+    page.getByRole("button", { name: "Run simulation", exact: true }),
+  ).toBeEnabled();
+  await page.getByLabel("UE SST").fill("2");
+  await page.getByLabel("UE SST").press("Tab");
+  await expect(
+    page.getByRole("button", { name: "Run simulation", exact: true }),
+  ).toBeEnabled();
+  await page.getByLabel("UE SD").fill("010203");
+  await page.getByLabel("UE SD").press("Tab");
+  await expect(
+    page.getByRole("button", { name: "Run simulation", exact: true }),
+  ).toBeEnabled();
+  await page.getByLabel("Simulation speed").selectOption("10");
+  await page
+    .getByRole("button", { name: "Run simulation", exact: true })
+    .click();
+  await expect(
+    page.getByText("REGISTERED · NIA2 / NEA2", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Establish PDU session", exact: true })
+    .click();
+  await expect(
+    page.getByText("Active: research.example · SST 2 · SD 010203", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Send echo", exact: true }).click();
+  await expect(
+    page.locator(".event-row").filter({ hasText: "Echo delivered" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Results", exact: true }).click();
+  await page.getByRole("button", { name: "Save run", exact: true }).click();
+  await expect(
+    page.getByText("Experiment checkpoint saved with command journal.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const download = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export experiment", exact: true })
+    .click();
+  const artifact = JSON.parse(
+    readFileSync((await (await download).path())!, "utf8"),
+  );
+  expect(
+    artifact.commands.map((c: { action: { type: string } }) => c.action.type),
+  ).toEqual(["establish", "echo"]);
+  expect(artifact.scenario.version).toBe(2);
+  await page.reload();
+  await page.getByRole("button", { name: "Results", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Restore saved run", exact: true })
+    .click();
+  const download2 = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export experiment", exact: true })
+    .click();
+  const restored = JSON.parse(
+    readFileSync((await (await download2).path())!, "utf8"),
+  );
+  expect(restored).toEqual(artifact);
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page
+    .getByRole("button", { name: "Compare experiment", exact: true })
+    .click();
+  await (
+    await chooserPromise
+  ).setFiles({
+    name: "experiment.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(artifact)),
+  });
+  await expect(
+    page.getByRole("table", { name: "Experiment comparison" }),
+  ).toBeVisible();
+  // Corrupted replay must preserve the active experiment.
+  await page.locator("input[type=file]").setInputFiles({
+    name: "corrupt.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({ ...artifact, state_digest: "0".repeat(64) }),
+    ),
+  });
+  await expect(page.getByText(/Replay state digest mismatch/)).toBeVisible();
+  const download3 = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export experiment", exact: true })
+    .click();
+  expect(
+    JSON.parse(readFileSync((await (await download3).path())!, "utf8")),
+  ).toEqual(artifact);
+});
+
+test("policy denial exposes genuine failure and prevents session traffic", async ({
+  page,
+}) => {
+  const denied = structuredClone(minimal);
+  denied.session_policies = [
+    { request: { dnn: "lab", snssai: { sst: 1, sd: null } }, max_sessions: 0 },
+  ];
+  await page.locator("input[type=file]").setInputFiles({
+    name: "denied.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(denied)),
+  });
+  await page.getByLabel("Simulation speed").selectOption("10");
+  await page
+    .getByRole("button", { name: "Run simulation", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
+    .click();
+  await expect(
+    page.getByText("REGISTERED · NIA2 / NEA2", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Establish PDU session", exact: true })
+    .click();
+  await expect(
+    page.getByText(/5GSM cause 26: Insufficient resources/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Send echo", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "5GSM", exact: true }).click();
+  await expect(
+    page.locator(".event-row").filter({ hasText: "0xc3" }),
+  ).toBeVisible();
+});
+
+test("IndexedDB v1 migration preserves scenarios and quota failure remains recoverable", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.route("**/migration-setup", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>Storage migration setup</title>",
+    }),
+  );
+  await page.route("**/config.json", (route) =>
+    route.fulfill({
+      json: { tiles: "", search: "", overpass: "", osmMap: "" },
+    }),
+  );
+  await page.route(/^https:\/\//, (route) => route.abort());
+  await page.goto("/migration-setup");
+  await page.evaluate(
+    async (scenario) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("ranterra", 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore("scenarios");
+          request.result.createObjectStore("assets");
+        };
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction("scenarios", "readwrite");
+          tx.objectStore("scenarios").put(scenario, "current");
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+    },
+    { ...minimal, name: "Migrated legacy scenario" },
+  );
+  await page.goto("/");
+  await expect(page.getByLabel("Scenario name")).toHaveValue(
+    "Migrated legacy scenario",
+  );
+  await page.getByRole("button", { name: "Results", exact: true }).click();
+  await page.evaluate(() => {
+    const original = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (
+      ...args: Parameters<IDBObjectStore["put"]>
+    ) {
+      if (this.name === "runs")
+        throw new DOMException(
+          "Injected quota exhaustion",
+          "QuotaExceededError",
+        );
+      return original.apply(this, args);
+    };
+  });
+  await page.getByRole("button", { name: "Save run", exact: true }).click();
+  await expect(
+    page.getByText(/Save run failed:.*QuotaExceededError/),
+  ).toBeVisible();
+  const download = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export experiment", exact: true })
+    .click();
+  const artifact = JSON.parse(
+    readFileSync((await (await download).path())!, "utf8"),
+  );
+  expect(artifact.scenario.name).toBe("Migrated legacy scenario");
+  expect(artifact.started).toBe(false);
+  await context.close();
 });

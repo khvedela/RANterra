@@ -1,6 +1,7 @@
 //! Collocated SMF/UPF laboratory profile. N4 is a typed local boundary, not PFCP.
 use oxirush_nas::Validate;
 
+use crate::model::{SessionRequest, Snssai};
 use oxirush_nas::nas_5gs::{decode_nas_5gs_message, encode_nas_5gs_message};
 use oxirush_ngap::{build_ngap, extract_ngap_ies, helpers::*, macros::MissingIeError, ngap::*};
 use rasn::types::{Any, FixedOctetString};
@@ -14,6 +15,7 @@ pub struct Session {
     pub downlink_teid: u32,
     pub dnn: String,
     pub sst: u8,
+    pub sd: Option<[u8; 3]>,
     pub sent: u64,
     pub delivered: u64,
     pub dropped: u64,
@@ -21,15 +23,16 @@ pub struct Session {
     pub active: bool,
 }
 impl Session {
-    pub fn new(ue_id: u32, slot: u32) -> Self {
+    pub fn new(ue_id: u32, slot: u32, request: &SessionRequest) -> Self {
         Self {
             ue_id,
             id: 1,
             ip: [10, 45, 0, slot as u8],
             uplink_teid: slot * 2,
             downlink_teid: slot * 2 + 1,
-            dnn: "lab".into(),
-            sst: 1,
+            dnn: request.dnn.clone(),
+            sst: request.snssai.sst,
+            sd: request.snssai.sd,
             sent: 0,
             delivered: 0,
             dropped: 0,
@@ -48,7 +51,7 @@ pub fn nas(bytes: Vec<u8>) -> Result<Vec<u8>, String> {
 pub fn request() -> Result<Vec<u8>, String> {
     nas(vec![0x2e, 1, 1, 0xc1, 0xff, 0xff, 0x91, 0xa1])
 }
-pub fn accept(ip: [u8; 4]) -> Result<Vec<u8>, String> {
+pub fn accept(ip: [u8; 4], policy: &SessionRequest) -> Result<Vec<u8>, String> {
     // SSC1/IPv4; one default QoS rule, match-all packet filter, QFI1;
     // session AMBR 1 Mbit/s in both directions; 5QI9 non-GBR.
     let mut b = vec![
@@ -56,18 +59,28 @@ pub fn accept(ip: [u8; 4]) -> Result<Vec<u8>, String> {
         0x29, 5, 1,
     ];
     b.extend(ip);
-    b.extend([
-        0x22, 1, 1, 0x79, 0, 6, 1, 0x20, 0x41, 1, 1, 9, 0x25, 4, 3, b'l', b'a', b'b',
-    ]);
+    b.extend([0x22, policy.snssai.bytes().len() as u8]);
+    b.extend(policy.snssai.bytes());
+    b.extend([0x79, 0, 6, 1, 0x20, 0x41, 1, 1, 9]);
+    b.extend([0x25, policy.dnn_bytes().len() as u8]);
+    b.extend(policy.dnn_bytes());
     nas(b)
 }
-pub fn n1(sm: Vec<u8>, uplink: bool, initial: bool) -> Result<Vec<u8>, String> {
+pub fn n1(
+    sm: Vec<u8>,
+    uplink: bool,
+    initial: bool,
+    policy: &SessionRequest,
+) -> Result<Vec<u8>, String> {
     let mut b = vec![0x7e, 0, if uplink { 0x67 } else { 0x68 }, 1];
     b.extend((sm.len() as u16).to_be_bytes());
     b.extend(sm);
     b.extend([0x12, 1]);
     if initial {
-        b.extend([0x81, 0x22, 1, 1, 0x25, 4, 3, b'l', b'a', b'b']);
+        b.extend([0x81, 0x22, policy.snssai.bytes().len() as u8]);
+        b.extend(policy.snssai.bytes());
+        b.extend([0x25, policy.dnn_bytes().len() as u8]);
+        b.extend(policy.dnn_bytes());
     }
     nas(b)
 }
@@ -98,7 +111,7 @@ fn tunnel(teid: u32) -> UPTransportLayerInformation {
         None,
     ))
 }
-pub fn setup(ue: u32, teid: u32, nas: Vec<u8>) -> Result<Vec<u8>, String> {
+pub fn setup(ue: u32, teid: u32, nas: Vec<u8>, slice: &Snssai) -> Result<Vec<u8>, String> {
     let qos = QosFlowSetupRequestList(vec![QosFlowSetupRequestItem::new(
         QosFlowIdentifier(1.into()),
         QosFlowLevelQosParameters::new(
@@ -124,6 +137,14 @@ pub fn setup(ue: u32, teid: u32, nas: Vec<u8>) -> Result<Vec<u8>, String> {
         None,
     )]);
     let ies = vec![
+        (
+            130,
+            encode(&PDUSessionAggregateMaximumBitRate::new(
+                BitRate(1_000_000.into()),
+                BitRate(1_000_000.into()),
+                None,
+            ))?,
+        ),
         (139, encode(&tunnel(teid))?),
         (134, encode(&PDUSessionType::ipv4)?),
         (136, encode(&qos)?),
@@ -144,7 +165,11 @@ pub fn setup(ue: u32, teid: u32, nas: Vec<u8>) -> Result<Vec<u8>, String> {
     let list = PDUSessionResourceSetupListSUReq(vec![PDUSessionResourceSetupItemSUReq::new(
         PDUSessionID(1),
         Some(NASPDU(nas.into())),
-        SNSSAI::new(SST(FixedOctetString::new([1])), None, None),
+        SNSSAI::new(
+            SST(FixedOctetString::new([slice.sst])),
+            slice.sd.map(|sd| SD(FixedOctetString::new(sd))),
+            None,
+        ),
         encode(&transfer)?.into(),
         None,
     )]);
@@ -158,7 +183,7 @@ fn setup_ies(
     extract_ngap_ies!(m,PDUSessionResourceSetupRequest,req ue:u32=RAN_UE_NGAP_ID(id),req amf:u64=AMF_UE_NGAP_ID(id),req list:PDUSessionResourceSetupListSUReq=PDUSessionResourceSetupListSUReq(v)=>v.clone(),);
     Ok((ue, amf, list))
 }
-pub fn decode_setup(bytes: &[u8], ue: u32, teid: u32) -> Result<Vec<u8>, String> {
+pub fn decode_setup(bytes: &[u8], ue: u32, teid: u32, slice: &Snssai) -> Result<Vec<u8>, String> {
     let NGAP_PDU::initiatingMessage(p) = NGAP_PDU::decode(bytes).map_err(|e| e.to_string())? else {
         return Err("Expected N2 setup request".into());
     };
@@ -172,6 +197,12 @@ pub fn decode_setup(bytes: &[u8], ue: u32, teid: u32) -> Result<Vec<u8>, String>
         return Err("N2 session context mismatch".into());
     }
     let item = &list.0[0];
+    if item.s_nssai.s_st.0.as_ref() != [slice.sst]
+        || item.s_nssai.s_d.as_ref().map(|sd| sd.0.as_ref())
+            != slice.sd.as_ref().map(|sd| sd.as_slice())
+    {
+        return Err("N2 S-NSSAI mismatch".into());
+    }
     let transfer: PDUSessionResourceSetupRequestTransfer =
         rasn::aper::decode(&item.p_dusession_resource_setup_request_transfer)
             .map_err(|e| e.to_string())?;
@@ -323,6 +354,22 @@ pub fn echo_reply(bytes: &[u8], ip: [u8; 4]) -> Result<Vec<u8>, String> {
     Ok(b)
 }
 
+/// AMF validates the service selected on the actual decoded UL transport.
+pub fn validate_selection(bytes: &[u8], expected: &SessionRequest) -> Result<(), String> {
+    use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
+    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(m)) =
+        decode_nas_5gs_message(bytes).map_err(|e| e.to_string())?
+    else {
+        return Err("Expected UL NAS transport".into());
+    };
+    if m.dnn.as_ref().map(|d| &d.value) != Some(&expected.dnn_bytes())
+        || m.s_nssai.as_ref().map(|s| &s.value) != Some(&expected.snssai.bytes())
+    {
+        return Err("N1 service selection mismatch".into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,16 +377,23 @@ mod tests {
     fn n1_sm_roundtrips() {
         let r = request().unwrap();
         assert_eq!(
-            unwrap_n1(&n1(r.clone(), true, true).unwrap(), true).unwrap(),
+            unwrap_n1(
+                &n1(r.clone(), true, true, &SessionRequest::default()).unwrap(),
+                true
+            )
+            .unwrap(),
             r
         );
-        accept([10, 45, 0, 1]).unwrap();
+        accept([10, 45, 0, 1], &SessionRequest::default()).unwrap();
     }
     #[test]
     fn n2_setup_roundtrip() {
-        let b = setup(101, 2, vec![1, 2, 3]).unwrap();
-        assert_eq!(decode_setup(&b, 101, 2).unwrap(), [1, 2, 3]);
-        assert!(decode_setup(&b, 102, 2).is_err());
+        let b = setup(101, 2, vec![1, 2, 3], &Snssai::default()).unwrap();
+        assert_eq!(
+            decode_setup(&b, 101, 2, &Snssai::default()).unwrap(),
+            [1, 2, 3]
+        );
+        assert!(decode_setup(&b, 102, 2, &Snssai::default()).is_err());
         let b = setup_response(101, 3).unwrap();
         validate_response(&b, 101, 3).unwrap();
     }

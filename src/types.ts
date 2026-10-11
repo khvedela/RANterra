@@ -16,7 +16,30 @@ export interface Gnodeb {
     numerology: number;
   };
 }
+export interface Snssai {
+  sst: number;
+  sd: number[] | null;
+}
+export interface SessionRequest {
+  dnn: string;
+  snssai: Snssai;
+}
+export interface SessionPolicy {
+  request: SessionRequest;
+  max_sessions: number;
+}
+export interface Recording {
+  format: "ranterra-experiment";
+  version: 1;
+  engine_profile: string;
+  scenario: Scenario;
+  commands: unknown[];
+  time_ms: number;
+  started: boolean;
+  state_digest: string;
+}
 export interface Ue {
+  session?: SessionRequest;
   fault?: string;
   mobility?: { waypoints: Point[]; speed_mps: number };
   id: number;
@@ -29,7 +52,8 @@ export interface Building {
   ring: Point[];
 }
 export interface Scenario {
-  version: 1;
+  version: 1 | 2;
+  session_policies?: SessionPolicy[];
   radio?: {
     model: "Legacy" | "UMi" | "UMa";
     shadow_fading: boolean;
@@ -81,6 +105,15 @@ export interface Snapshot {
   events: NetworkEvent[];
   coverage: Sample[];
   event_limit_reached: boolean;
+  session_failures: Record<
+    string,
+    {
+      domain: string;
+      cause: number;
+      reason: string;
+      retry_at_ms: number | null;
+    }
+  >;
   sessions: {
     ue_id: number;
     id: number;
@@ -88,6 +121,7 @@ export interface Snapshot {
     active: boolean;
     dnn: string;
     sst: number;
+    sd: number[] | null;
     sent: number;
     delivered: number;
     dropped: number;
@@ -102,10 +136,25 @@ export type WorkerCommand =
       loss: number;
       revision: number;
     }
+  | { type: "recording"; purpose: "export" | "save"; revision: number }
+  | { type: "compare"; recording: Recording; revision: number }
   | { type: "speed"; speed: number; revision: number }
-  | { type: "load"; scenario: Scenario; revision: number }
+  | { type: "load"; scenario: Scenario | Recording; revision: number }
   | { type: "play" | "pause" | "step"; revision: number };
 export type WorkerResponse =
-  | { type: "snapshot"; snapshot: Snapshot; running: boolean; revision: number }
+  | {
+      type: "recording";
+      recording: Recording;
+      purpose: "export" | "save";
+      revision: number;
+    }
+  | { type: "comparison"; snapshot: Snapshot; name: string; revision: number }
+  | {
+      type: "snapshot";
+      scenario?: Scenario;
+      snapshot: Snapshot;
+      running: boolean;
+      revision: number;
+    }
   | { type: "error"; message: string; revision: number };
 export type ToolMode = "select" | "gnodeb" | "ue" | "move" | "trajectory";

@@ -13,13 +13,15 @@
     "test:wasm": "node scripts/test-wasm.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test:worker": "node scripts/test-worker.mjs",
-    "test": "npm run test:rust && npm run test:wasm && npm run test:worker",
+    "test": "npm run test:rust && npm run test:wasm && npm run test:worker && npm run test:replay",
     "format": "prettier --write src/*.ts src/*.tsx src/*.css scripts/*.mjs README.md docs/*.md && cargo fmt --all",
     "lint": "eslint src tests scripts *.ts *.js",
     "typecheck": "tsc -b",
     "test:browser": "playwright test",
     "benchmark": "cargo run --release -p ranterra-engine --example benchmark",
-    "benchmark:wasm": "node scripts/benchmark-wasm.mjs"
+    "benchmark:wasm": "node scripts/benchmark-wasm.mjs",
+    "test:replay": "node scripts/test-replay.mjs",
+    "test:protocols": "sh scripts/validate-protocols.sh"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.0",

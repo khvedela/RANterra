@@ -29,6 +29,7 @@ pub struct Registration {
     amf_security: Option<NasSecurityContext>,
     sqn: u64,
     request: Vec<u8>,
+    allowed_slices: Vec<crate::model::Snssai>,
     pub failure: Option<String>,
 }
 pub struct Received {
@@ -94,9 +95,14 @@ impl Registration {
             ue_security: None,
             amf_security: None,
             sqn: 0,
+            allowed_slices: vec![crate::model::Snssai::default()],
             request: protocol::registration_request(id)?,
             failure: None,
         })
+    }
+    pub fn with_slices(mut self, slices: Vec<crate::model::Snssai>) -> Self {
+        self.allowed_slices = slices;
+        self
     }
     pub fn fail(&mut self, reason: String) {
         self.failure = Some(reason);
@@ -258,7 +264,14 @@ impl Registration {
                 let mut accept = vec![0x7e, 0, 0x42, 1, 1, 0x77, 0, 11];
                 accept.extend(guti);
                 // TAI type 0, one TAC, test PLMN 001/01, TAC 1; allowed NSSAI SST 1.
-                accept.extend([0x54, 7, 0, 0, 0xf1, 0x10, 0, 0, 1, 0x15, 2, 1, 1]);
+                accept.extend([0x54, 7, 0, 0, 0xf1, 0x10, 0, 0, 1]);
+                let mut allowed = vec![];
+                for slice in &self.allowed_slices {
+                    allowed.push(slice.bytes().len() as u8);
+                    allowed.extend(slice.bytes());
+                }
+                accept.extend([0x15, allowed.len() as u8]);
+                accept.extend(allowed);
                 Some(protect(
                     &mut self.amf_security,
                     accept,

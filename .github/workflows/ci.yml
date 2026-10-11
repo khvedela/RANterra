@@ -20,6 +20,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo install wasm-pack --version 0.15.0 --locked
       - run: cargo install cargo-audit --version 0.22.2 --locked
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.2"
+          cache-dependency-path: validation/free5gc/go.sum
       - run: npm ci
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -27,12 +31,13 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm run typecheck
-      - run: npm run test:wasm && npm run test:worker
+      - run: npm run test:wasm && npm run test:worker && npm run test:replay && npm run test:protocols
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:browser
       - run: npm audit --audit-level=moderate
       - run: cargo audit
-      - run: node scripts/check-licenses.mjs
+      - run: node scripts/check-licenses.mjs && python3 scripts/check-validation-licenses.py
+      - run: python3 scripts/audit-validation.py
       - run: python3 scripts/generate-kdf-vectors.py > /tmp/kdf.json && diff engine/tests/kdf-vectors.json /tmp/kdf.json
       - run: node scripts/verify-build.mjs && npm run build && node scripts/verify-build.mjs --compare
       - run: cargo run --release --locked -p ranterra-engine --example benchmark && npm run benchmark:wasm
@@ -44,3 +49,4 @@ jobs:
             build-manifest.json
             docs/V1_RELEASE_REPORT.md
             docs/DEPENDENCIES.json
+            test-results/validation-go-audit.json
