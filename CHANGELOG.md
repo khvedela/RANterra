@@ -48,6 +48,14 @@ Target release: 1.0.0. Release eligibility remains blocked; see `docs/V1_RELEASE
 - Repair missing npm peer dependencies and enforce normal peer resolution; pin CI actions and add isolated fuzz CI.
 - Keep 1.0.0-rc.1: remote candidate CI and authorized HTTPS deployment verification remain open. No commit/push/deployment/publication.
 
+### Remote CI and free-host preparation
+
+- Commit and push the candidate with explicit authorization; resolve Linux Firefox startup by testing with an Xvfb display and retaining failure diagnostics.
+- Keep simulation and exports available when map initialization fails; add a real no-WebGL browser regression. The expanded 24-test Chromium/Firefox suite passes locally and on Linux CI.
+- Correct overlapping cache rules to match Cloudflare header merging and add exact cache-header checks.
+- Complete both remote CI jobs, verify the downloaded candidate artifact, and document Cloudflare Pages Free as the recommended static-host option.
+- Keep release/deployment on hold pending host selection and hosted acceptance checks.
+
 ## 0.1.0
 
 Original Rust/WASM registration-request/reject MVP with map workspace, approximate RF, OSM geometry, deterministic transport and local persistence.

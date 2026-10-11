@@ -1,6 +1,6 @@
 # Verification record — 2026-10-11
 
-Evidence applies to the current **1.0.0-rc.1 research candidate**, not certification. [Release acceptance](V1_RELEASE_REPORT.md) remains blocked on remote CI for this tree and authorized HTTPS hosting verification. Counts and raw measurements are retained in [reliability-results.json](reliability-results.json) and [benchmark-results.json](benchmark-results.json).
+Evidence applies to the current **1.0.0-rc.1 research candidate**, not certification. [Release acceptance](V1_RELEASE_REPORT.md) remains blocked on authorized HTTPS hosting verification; the candidate application/workflow passes remote CI. Counts and raw measurements are retained in [reliability-results.json](reliability-results.json) and [benchmark-results.json](benchmark-results.json).
 
 ## Baseline and final local checks
 
@@ -9,7 +9,7 @@ The original MVP baseline passed 14 Rust tests plus actual WASM/worker checks. B
 - `cargo test --workspace --locked`: **66 passed**, comprising 35 unit, 10 replay/policy, 2 RF, 4 reliability, 3 cryptographic, 7 signaling and 5 shared-SMF tests. The clean-copy reliability test binary completed in 35.68 seconds; elapsed time varies by build/debug profile and contention.
 - `npm run test:protocols`: **13 uncached interactive Go/free5GC peers**, six AUTS negative subcases and **30 byte-exact codec frames** passed. This uses the application's registration and SMF state machines, not an alternate adapter allocator.
 - `npm run test:wasm`, `npm run test:worker`, `npm run test:replay`: actual generated WASM, production worker and native↔WASM checkpoint continuation passed for normal and AUTS registration. The profile-2 checked-in recording remains compatible; new profile-3 tests reconstruct delayed operations and registration retry.
-- `npm run test:browser`: **22 passed**, 11 each in Chromium/Firefox, against production static assets and real WASM. Includes normal/fault/AUTS registration, timed setup/release loss, failed N2, T3550 unconfirmed outcome, packets, inspector, saved scenarios/checkpoints, imports/comparison, offline computation, worker recovery, quota/denied-storage injection, malicious labels and static headers/routes.
+- `npm run test:browser`: **24 passed**, 12 each in Chromium/Firefox, against production static assets and real WASM. Includes normal/fault/AUTS registration, timed setup/release loss, failed N2, T3550 unconfirmed outcome, packets, inspector, saved scenarios/checkpoints, imports/comparison, offline computation, worker recovery, quota/denied-storage injection, malicious labels and static headers/routes.
 - `npm run test:inputs`: provider configuration is validated before application; unsafe URL forms/unknown fields and byte-limit overflow fail; oversized response readers are cancelled.
 - `npm run build`, TypeScript, ESLint, rustfmt and Clippy with denied warnings pass. Independent Python KDF expectations regenerate byte-identically.
 - `npm ci && npm run build && npm test && npm run test:inputs` passed in a copied source tree with no node_modules/dist/target/generated WASM. Node 24.18.0, Rust 1.97.1. Final example/help-text corrections were checked separately in the main tree; final production browser/reproducibility tests use those corrections.
@@ -35,7 +35,7 @@ Browser quota/denied-access tests inject failures; actual disk exhaustion and al
 - Go test-graph audit: only documented isolated-validator GO-2022-1083 exception; additional reachable findings fail.
 - License inventory: **426 locked packages**; nine standalone Go dependencies with retained notices. Fuzzer tooling is not shipped; libfuzzer-sys's bundled NCSA notice obligation is documented.
 - The previously existing [remote CI run](https://github.com/khvedela/RANterra/actions/runs/38139175447) failed at npm installation because `@luma.gl/webgpu` and `@webgpu/types` were absent from the lockfile. Local legacy-peer configuration had concealed the problem. The lockfile now includes those peer packages and `.npmrc` forces normal peer resolution; clean local install passes.
-- Revised GitHub Actions uses pinned action SHAs, Node 24.18.0, Rust 1.97.1, Go 1.27.2, both browser projects, audit/license/reproducibility checks and a separate 60-second sanitizer fuzz job. **It has not run remotely for this uncommitted tree.** No push, deployment or publication occurred.
+- Revised GitHub Actions uses pinned action SHAs, Node 24.18.0, Rust 1.97.1, Go 1.27.2, both browser projects, audit/license/reproducibility checks and a separate 60-second sanitizer fuzz job. **Both jobs passed on candidate `57bb6aedaf3f8ea350af143b594db01651bbc4f0`**, [run 38148564181](https://github.com/khvedela/RANterra/actions/runs/38148564181). Candidate commits were pushed with user authorization; no deployment or release publication occurred.
 
 ## Reproduce
 
@@ -51,6 +51,8 @@ npm test
 npm run test:inputs
 npm run test:protocols
 npx playwright install chromium firefox
+# Linux CI uses a virtual display for real WebGL2:
+# RANTERRA_HEADED=1 xvfb-run --auto-servernum npm run test:browser
 npm run test:browser
 RANTERRA_SOAK_CYCLES=16384 npm run test:soak
 # Install the isolated toolchain per validation/fuzz/README.md first:
@@ -79,6 +81,8 @@ Benchmarks cover the existing 16-cell/128-UE/467-building/1,225-grid-sample UMa 
 
 Candidate `908533308ee46318d28bb448a3056bd17aef68ce` was committed and pushed with explicit user authorization. [Run 38147397454](https://github.com/khvedela/RANterra/actions/runs/38147397454) passed native tests, lint, production build, actual WASM/worker/replay, independent peers and Chromium (11 tests). The separate Linux sanitizer job passed 197,732 inputs in 61 seconds. The validation job failed because all 11 Firefox tests could not find the application controls at startup. Later audit/reproducibility steps were skipped; this run is not a full pass.
 
-The follow-up adds a headless/headed Firefox WebGL2 probe, runs browser CI under Xvfb, retains failure screenshots/traces, and catches map-construction errors so unsupported graphics cannot unmount the entire application. Normal browser tests still require a real map canvas and no map warning; a separate negative test checks graceful behavior when WebGL is deliberately unavailable. Timeouts and protocol assertions were not relaxed. The next remote result will determine whether the environment diagnosis is correct.
+The follow-up adds a headless/headed Firefox WebGL2 probe, runs browser CI under Xvfb, retains failure screenshots/traces, and catches map-construction errors so unsupported graphics cannot unmount the entire application. Normal browser tests still require a real map canvas and no map warning; a separate negative test checks graceful behavior when WebGL is deliberately unavailable. Timeouts and protocol assertions were not relaxed. The corrective run now passes. Both headless and headed Firefox obtain WebGL2 under Xvfb (llvmpipe); the full suite is run headed. The initial runner lacked retained page traces, so the precise earlier graphics exception remains an inference, not a recovered diagnostic.
 
 Hosting research also found conflicting global `no-cache` and immutable-asset rules under Cloudflare's comma-merge behavior. Cache rules now avoid that overlap, and the local server combines matching custom headers. Targeted Chromium/Firefox header tests pass. No deployment was performed.
+
+Final corrective candidate **`57bb6aedaf3f8ea350af143b594db01651bbc4f0`**: [both CI jobs passed](https://github.com/khvedela/RANterra/actions/runs/38148564181). All 24 production browser tests passed in 2.5 minutes, along with the full native/protocol/runtime/audit/license/reproducibility/benchmark pipeline. The sanitizer job passed 216,847 inputs in 61 seconds. The remote 128-cycle soak used 2,097,152 bytes maximum linear memory with zero post-warm-up growth, taking 1,849.392581 ms. The [uploaded candidate](https://github.com/khvedela/RANterra/actions/runs/38148564181/artifacts/11706467440) was downloaded and all 38 manifest hashes and WASM magic checked. No external hosting was exercised. This evidence-only documentation update leaves the tested application and workflow unchanged.

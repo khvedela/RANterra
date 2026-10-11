@@ -1,6 +1,14 @@
 # RANterra v1 release report
 
-**2026-10-11 — candidate 1.0.0-rc.1, target 1.0.0. Release acceptance: BLOCKED.** The four latest engineering work areas are implemented and locally validated for the supported research profile. A green remote CI run for this candidate and an authorized HTTPS deployment verification are still required. The user has now authorized committing and pushing this candidate to obtain remote CI evidence. The first candidate CI run passed native/runtime/protocol/Chromium checks and sanitizer fuzzing but failed Firefox startup. Corrective validation is in progress; deployment and publication remain explicitly unauthorized.
+**2026-10-11 — candidate 1.0.0-rc.1, target 1.0.0. Release acceptance: BLOCKED only on authorized hosted verification for the documented research scope.** Local validation and both remote CI jobs pass for candidate `57bb6aedaf3f8ea350af143b594db01651bbc4f0`. The candidate and corrective changes were committed and pushed with user authorization. Deployment and publication remain explicitly on hold while a free host is selected.
+
+## Remote CI result and hosting decision
+
+[GitHub Actions run 38148564181](https://github.com/khvedela/RANterra/actions/runs/38148564181) completed successfully on Ubuntu 24.04.5: **66 Rust tests, 13 independent peers, 30 codec fixtures, 24 Chromium/Firefox tests**, real WASM/worker/replay, lint, audits/licenses, KDF fixtures, benchmarks and **38 matching artifact hashes**. The sanitizer job completed **216,847 executions in 61 seconds**. The [candidate build artifact](https://github.com/khvedela/RANterra/actions/runs/38148564181/artifacts/11706467440) was downloaded and all 38 file hashes independently matched its manifest. The zip digest reported by GitHub is `sha256:e8948f0746d33fc47b8a6848f521a930c2fa159b44cfcb40200f71a08b3e07b9`. This report update changes documentation only; the linked SHA identifies the tested application and workflow.
+
+The first candidate run (`9085333`, [failed run](https://github.com/khvedela/RANterra/actions/runs/38147397454)) passed Chromium but failed all Firefox startup assertions. CI now supplies an Xvfb display and records a graphics preflight: both headless and headed Firefox obtained WebGL2 with llvmpipe under that display. The full suite runs headed under Xvfb and passes. The original run did not retain page traces, so the precise original graphics failure is inferred from the environment change rather than recovered from a trace. Failure screenshots/traces are now retained. Map initialization exceptions now produce a visible warning while preserving simulation/export controls, with an explicit no-WebGL regression test. Timeouts and the normal real-map/protocol assertions were not weakened.
+
+Host research also exposed overlapping cache headers: Cloudflare merges values, so a global `no-cache` rule conflicted with immutable assets. Rules now avoid that overlap and the local server/tests enforce the merge behavior. **Cloudflare Pages Free is recommended**, using the provided domain and prebuilt CI artifact; no rented server is necessary. This is not a deployment decision or action. See [free-host comparison and current primary sources](hosting-options.md). Actual HTTPS, headers, routing, provider configuration and hosted browser checks remain open.
 
 This is a functioning browser-only research application with actual cryptography, encoded protocols and a virtual data plane. It is not a complete carrier core, an interoperability certification or standardized 6G implementation. Local validation is not substituted for hosting evidence.
 
@@ -59,7 +67,7 @@ The original MVP baseline passed 14 native tests and actual WASM/worker checks b
 | Native Rust | **66 passed**: 35 unit, 10 experiment, 2 RF, 4 reliability, 3 crypto, 7 signaling, 5 SMF |
 | Independent Go/free5GC peer | **13 passed**, plus six AUTS negative subcases; both registration roles, shared SMF, timers and failed N2 |
 | Independent codec round trips | **30 byte-exact NAS/NGAP fixtures** |
-| Production Chromium/Firefox | **22 passed**, 11 per browser |
+| Production Chromium/Firefox | **24 passed locally and remotely**, 12 per browser |
 | Actual WASM, production worker, native↔WASM replay | Passed, including AUTS, session traffic/cleanup, ordering, offline computation, checkpoint continuation and stale-command isolation |
 | Native deterministic mutations | 12,000 inputs / **144,000 parser/authentication calls**; 254 allocation/release cycles; queue saturation and malformed transport |
 | Coverage-guided native fuzzing | **837,065 executions / 301 seconds**, no crash or sanitizer finding; seed 501, nightly-2026-07-20, 38,113 coverage edges (not a coverage percentage) |
@@ -73,7 +81,8 @@ The original MVP baseline passed 14 native tests and actual WASM/worker checks b
 | Go validation audit | Explicit isolated-tool exception GO-2022-1083; no additional reachable finding |
 | Licenses | **426 locked packages**, plus nine standalone Go dependencies with retained notices; no AGPL integrated |
 | Internal ASVS Level 1 review | 70 decisions/evidence references; **4 pending host requirements**; not certification |
-| Remote candidate CI / hosted deployment | **Not verified for this tree** |
+| Remote candidate CI | **PASS** at `57bb6ae`; [both jobs](https://github.com/khvedela/RANterra/actions/runs/38148564181) |
+| Hosted deployment | **Not authorized or verified** |
 
 Initial browser runs exposed real import/checkbox timing problems and outdated expectations, which were fixed. A run during heavy compilation also hit three Chromium boot timeouts; the subsequent full run passed without increasing the timeout. Successful final runs do not erase those earlier failures. Storage errors are injected, not a claim of exhausting real disk quota. The five-minute fuzzer and 103-second extended soak are finite campaigns, not day-long reliability certification. Fuzz tooling is isolated from browser assets; six permissively licensed tooling dependencies and their NCSA obligation were reviewed.
 
@@ -106,6 +115,8 @@ Worker reload (validation + RF + serialization + transfer) measured **49.07 ms m
 
 Commands: `npm run benchmark`, `npm run benchmark:wasm`, `node scripts/test-worker.mjs --benchmark`. Existing bounded guards (<64 MiB WASM linear memory; <5 seconds initialization) pass. Motion updates UE links incrementally; editing reconstructs the RF grid. No fidelity is reduced automatically. See [exact numbers and history](benchmark-results.json).
 
+The Linux CI runner separately measured native initialization median/max **40.28/40.52 ms**, WASM **72.42/266.30 ms**, and registration median **19.76 ms native / 38.71 ms WASM**. WASM linear memory was **6,488,064 bytes**; sampled Node RSS **445,243,392 bytes**. CI's 128-cycle/2,560-echo soak took **1,849.39 ms** with zero post-warm-up growth. These shared-runner results are not substituted for local-machine figures or a rendering SLA.
+
 ## Release gates and remaining limitations
 
 | Gate | Status |
@@ -115,10 +126,10 @@ Commands: `npm run benchmark`, `npm run benchmark:wasm`, `node scripts/test-work
 | Movement affects radio/state; equations validated and limitations documented | PASS for specified models and reassociation |
 | Save/restore/import/export/replay and transactional invalid-input handling | PASS for bounded supported actions/profiles |
 | Local automated validation and applicable local security checks | PASS within the explicit test/assessment scope |
-| Green remote CI for the exact candidate commit | OPEN — revised workflow and lockfile fix not run remotely |
+| Green remote CI for the candidate application/workflow | **PASS** at `57bb6ae`; report follow-up changes documentation only |
 | Authorized production HTTPS deployment/provider verification | OPEN — no deployment authorized/performed |
-| Stable v1.0 release eligibility | **FAIL / BLOCKED until external gates pass** |
+| Stable v1.0 release eligibility | **FAIL / BLOCKED until hosted verification passes** |
 
 Deliberate limitations remain visible: no production subscriber credentials; no RRC/AS security/PHY/NG setup/SCTP/internet forwarding/SBI/PFCP; one IPv4 session per UE, fixed QFI/5QI and no throughput enforcement; limited timer/failure variants; no protocol handover or automatic mobility reconnection; no RSRQ, terrain or height/material-aware RF; no WebKit/mobile certification, field calibration or measured browser-paint/peak-memory budget; bounded histories/journals and pool exhaustion after 254 allocations until reset; synchronous bounded replay/grid computation in a worker; advisory extension traits and no-op controller rather than a trained policy. Large geography bundle warnings remain.
 
-These limits are not renamed successes. Expansion beyond the documented research subset requires further implementation and validation. The candidate stays **1.0.0-rc.1**. Commit/push is now authorized for candidate validation. Deployment/publication remains withheld pending host selection and separate authorization.
+These limits are not renamed successes. Expansion beyond the documented research subset requires further implementation and validation. The candidate stays **1.0.0-rc.1**. Candidate and corrective commits are pushed. Deployment/publication remains withheld pending host selection and separate authorization.

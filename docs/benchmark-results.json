@@ -118,5 +118,24 @@
       "buildings": 467,
       "node_process_rss_bytes": 569049088
     }
+  },
+  "remote_linux_candidate": {
+    "sha": "57bb6aedaf3f8ea350af143b594db01651bbc4f0",
+    "run": "https://github.com/khvedela/RANterra/actions/runs/38148564181",
+    "runner": "Ubuntu 24.04.5 GitHub-hosted x86_64",
+    "native": {
+      "rf_median_ms": 40.28235,
+      "rf_max_ms": 40.515976,
+      "registration_median_ms": 19.763971,
+      "snapshot_json_bytes": 1038553
+    },
+    "wasm_node": {
+      "rf_median_ms": 72.42360099999996,
+      "rf_max_ms": 266.30255999999997,
+      "registration_median_ms": 38.705423999999994,
+      "wasm_linear_memory_bytes": 6488064,
+      "node_rss_bytes": 445243392,
+      "snapshot_json_bytes": 1038013
+    }
   }
 }

@@ -6,7 +6,7 @@
   "rust_tests": 66,
   "independent_peer_tests": 13,
   "independent_codec_frames": 30,
-  "browser_tests": 22,
+  "browser_tests": 24,
   "browser_projects": [
     "Chromium",
     "Firefox"
@@ -90,7 +90,6 @@
   },
   "release_acceptance": "BLOCKED",
   "remaining_gates": [
-    "Green remote CI for exact candidate commit",
     "Authorized HTTPS hosting and configured-provider verification"
   ],
   "limitations": [
@@ -99,6 +98,43 @@
     "RSS includes host/JIT; no peak browser-tab memory or paint-latency measurement",
     "Normal WB-N1 initial registration only; supported failed N2 cause 22, not every conditional NAS/N2 procedure",
     "Legacy profile 2 preserves atomic sessions; new profile 3 schedules session signaling",
-    "Internal ASVS Level 1 assessment; host controls pending; no external certification"
-  ]
+    "Internal ASVS Level 1 assessment; host controls pending; no external certification",
+    "Remote CI uses real browser WebGL2 under Xvfb/llvmpipe; no physical GPU or external host validation"
+  ],
+  "remote_ci": {
+    "first_candidate": {
+      "sha": "908533308ee46318d28bb448a3056bd17aef68ce",
+      "run": "https://github.com/khvedela/RANterra/actions/runs/38147397454",
+      "result": "FAIL: Linux Firefox startup; Chromium and earlier checks passed",
+      "fuzz_executions": 197732,
+      "fuzz_seconds": 61
+    },
+    "corrective_candidate": {
+      "sha": "57bb6aedaf3f8ea350af143b594db01651bbc4f0",
+      "run": "https://github.com/khvedela/RANterra/actions/runs/38148564181",
+      "result": "PASS: validate and fuzz jobs",
+      "rust_tests": 66,
+      "independent_peer_tests": 13,
+      "independent_codec_frames": 30,
+      "browser_tests": 24,
+      "browser_wall_minutes": 2.5,
+      "runner": "Ubuntu 24.04.5, x86_64, Xvfb/llvmpipe",
+      "fuzz_executions": 216847,
+      "fuzz_seconds": 61,
+      "artifact_url": "https://github.com/khvedela/RANterra/actions/runs/38148564181/artifacts/11706467440",
+      "artifact_zip_sha256": "e8948f0746d33fc47b8a6848f521a930c2fa159b44cfcb40200f71a08b3e07b9",
+      "downloaded_file_hashes_verified": 38,
+      "wasm_soak": {
+        "workload": "128 create/register/session/20-echo/release/deregister/replay/free cycles",
+        "cycles": 128,
+        "packets": 2560,
+        "warmup_cycles": 32,
+        "elapsed_wall_ms": 1849.392581,
+        "wasm_warmup_linear_bytes": 2097152,
+        "wasm_max_linear_bytes": 2097152,
+        "post_warmup_growth_bytes": 0,
+        "node_process_rss_bytes": 497197056
+      }
+    }
+  }
 }
