@@ -1,8 +1,8 @@
 # Free static hosting options
 
-Reviewed 2026-10-11. **Recommendation: Cloudflare Pages Free**, subject to the actual hosted acceptance checks. This is a recommendation only: no account, project, deployment, custom domain or billing configuration was created.
+Reviewed 2026-10-11. **Recommendation: Cloudflare Pages Free**, subject to the actual hosted acceptance checks. Cloudflare Pages Free has now been selected and the verified candidate is live at https://ranterra.pages.dev. The requested custom domain awaits its CNAME; portfolio and billing configuration remain unchanged. See [actual deployment evidence](hosting-evidence.json).
 
-RANterra runs protocol/RF computation in each visitor's browser. The host serves HTML, JavaScript, WASM, license notices and optional data; it does not run a 5G backend. The locally verified bundle is 7,133,352 bytes (about 7.13 MB) across 13 files, with a 3.28 MB WASM file. There is no need to rent a server.
+RANterra runs protocol/RF computation in each visitor's browser. The host serves HTML, JavaScript, WASM, license notices and optional data; it does not run a 5G backend. The locally verified bundle is 7,132,757 bytes (about 7.13 MB) across 14 artifacts, with a 3.28 MB WASM file. There is no need to rent a server.
 
 | Option                           | Current free allowance / fit                                                                                                                                                         | Trade-off                                                                                                                                                                  |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -19,7 +19,7 @@ Use the already-tested `dist/` artifact from a successful GitHub Actions run and
 
 Keep deployment manual until the hosted gates pass. Do not connect automatic branch deployment or add a publishing workflow merely to run validation. The current GitHub workflow only tests and retains an artifact.
 
-Before approval, select the geographic provider policy. Hosting being free does not grant unlimited public OSM tiles, geocoding or Overpass capacity. Loaded computation and bundled geography remain local; optional external providers have their own terms and limits. A custom domain is optional and may cost money. No paid functions, database or storage product is needed for core emulation.
+The deployed demonstration uses OSM Standard tiles for light interactive viewing with visible attribution; Overpass retrieval remains manual and search is disabled by default. Hosting being free does not grant unlimited public OSM tiles, geocoding or Overpass capacity. Loaded computation and bundled geography remain local; optional external providers have their own terms and limits. A custom domain is optional and may cost money. No paid functions, database or storage product is needed for core emulation.
 
 ## Checks still requiring a real host
 

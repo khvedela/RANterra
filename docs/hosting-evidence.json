@@ -1,0 +1,440 @@
+{
+  "date": "2026-10-11T17:57:24.097Z",
+  "scope": "Cloudflare Pages origin; custom domain pending DNS. Internal finite checks, not certification.",
+  "project": {
+    "name": "ranterra",
+    "origin": "https://ranterra.pages.dev",
+    "deploymentId": "5ecdd003-abd2-49d1-8391-c24f1ccb4c21",
+    "deploymentURL": "https://5ecdd003.ranterra.pages.dev",
+    "environment": "production",
+    "status": "success",
+    "sourceCommit": "c9681f9f01b3871d1e170a0d26fe5e0849c909d8",
+    "functions": false,
+    "paidBindings": false,
+    "automaticDeployment": false
+  },
+  "ci": {
+    "run": 38160644943,
+    "url": "https://github.com/khvedela/RANterra/actions/runs/38160644943",
+    "conclusion": "success",
+    "nativeTests": 66,
+    "browserChecks": 32,
+    "browserDuration": "3.7 minutes",
+    "fuzzExecutions": 195219,
+    "fuzzDurationSeconds": 61,
+    "artifactId": 11711035631,
+    "artifactDigest": "sha256:4bd3c369a8f6df17982c17634bef538756dadadb3141a42f592b4351d2e9d115",
+    "verifiedManifestEntries": 14,
+    "deploymentBytes": 7132757,
+    "independentPeers": 13,
+    "codecFixtures": 30,
+    "wasmSoak": {
+      "workload": "128 create/register/session/20-echo/release/deregister/replay/free cycles",
+      "cycles": 128,
+      "packets": 2560,
+      "warmup_cycles": 32,
+      "elapsed_wall_ms": 1737.8431110000001,
+      "wasm_warmup_linear_bytes": 2097152,
+      "wasm_max_linear_bytes": 2097152,
+      "post_warmup_growth_bytes": 0,
+      "node_process_rss_bytes": 508297216
+    }
+  },
+  "localBrowser": {
+    "checks": 32,
+    "result": "passed",
+    "duration": "2.5 minutes"
+  },
+  "hostedBrowser": {
+    "checks": 32,
+    "result": "passed",
+    "duration": "2.8 minutes",
+    "browsers": ["Chromium", "Firefox"],
+    "thirdPartyGeography": "blocked"
+  },
+  "hostChecks": {
+    "checkedAt": "2026-10-11T17:55:17.944Z",
+    "origin": "https://ranterra.pages.dev",
+    "sourceCommit": "c9681f9f01b3871d1e170a0d26fe5e0849c909d8",
+    "responses": [
+      {
+        "path": "/ANT_DESIGN_NOTICES.txt",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/ANT_DESIGN_NOTICES.txt",
+        "bytes": 95998,
+        "sha256": "f65cb54afaf44dcc1edeea046c55bc0cb24698bceb9288601e5f918027be9241",
+        "headers": {
+          "content-type": "text/plain; charset=utf-8",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/assets/engine.worker-DFJxSKfp.js",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/assets/engine.worker-DFJxSKfp.js",
+        "bytes": 5834,
+        "sha256": "92819934188751cf18f0a0ae30f60686ef3ef20a4ac634e04bc1ee68f19cfe73",
+        "headers": {
+          "content-type": "application/javascript",
+          "cache-control": "public, max-age=31536000, immutable",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/assets/geography-RZO-t2LB.css",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/assets/geography-RZO-t2LB.css",
+        "bytes": 83127,
+        "sha256": "3c3faf7116e0ea3f4dd664bc9d6207bebf71dda2f9d3108b65527615011f2b2b",
+        "headers": {
+          "content-type": "text/css; charset=utf-8",
+          "cache-control": "public, max-age=31536000, immutable",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/assets/geography-ix_C3pNE.js",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/assets/geography-ix_C3pNE.js",
+        "bytes": 1932885,
+        "sha256": "8a067c2419f31f5795fc26daa20362410f9dfd5213e60bb2048dfeb94e427be9",
+        "headers": {
+          "content-type": "application/javascript",
+          "cache-control": "public, max-age=31536000, immutable",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/assets/index-CgKiSVnt.js",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/assets/index-CgKiSVnt.js",
+        "bytes": 1043327,
+        "sha256": "f2a234b97bad1dd21703c3b30e4ac0465812d287d5750760653edadd3cd8e30f",
+        "headers": {
+          "content-type": "application/javascript",
+          "cache-control": "public, max-age=31536000, immutable",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/assets/index-kwKYoqQ2.css",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/assets/index-kwKYoqQ2.css",
+        "bytes": 25909,
+        "sha256": "816bf385a5b00f1862218ecfdaf41dd798cfa05a4f5b15516040f6b4c2e325b9",
+        "headers": {
+          "content-type": "text/css; charset=utf-8",
+          "cache-control": "public, max-age=31536000, immutable",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/assets/maplibre-gl-worker-ox5X9dVz.js",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/assets/maplibre-gl-worker-ox5X9dVz.js",
+        "bytes": 506136,
+        "sha256": "1341f56c8703b8a43082f4b685d0be1526dc9b31e33c0087e1f71e567cdfb881",
+        "headers": {
+          "content-type": "application/javascript",
+          "cache-control": "public, max-age=31536000, immutable",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/assets/ranterra_engine_bg-CZ-jJpbY.wasm",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/assets/ranterra_engine_bg-CZ-jJpbY.wasm",
+        "bytes": 3277237,
+        "sha256": "62a72488449bae70e4de0dd35a043d13dbc1da86cafae139012ae519953bf4dd",
+        "headers": {
+          "content-type": "application/wasm",
+          "cache-control": "public, max-age=31536000, immutable",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/config.json",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/config.json",
+        "bytes": 211,
+        "sha256": "8d516672b0ae30df0809b3d899fbfa06e13e43f85ee4884946eb3f8280d064db",
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "no-cache",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/paris-buildings.json",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/paris-buildings.json",
+        "bytes": 159898,
+        "sha256": "9181ca2916e6e28ef7858160295e6af94cb14d818f44eeb2f50375372406b674",
+        "headers": {
+          "content-type": "application/json",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/",
+        "bytes": 988,
+        "sha256": "937cb30bc4461668fd0d519c86ec1c71be581e8cad62cd30cf43f1c28fc6c61a",
+        "headers": {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-cache",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/workspace",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/workspace",
+        "bytes": 988,
+        "sha256": "937cb30bc4461668fd0d519c86ec1c71be581e8cad62cd30cf43f1c28fc6c61a",
+        "headers": {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/experiment/host-check",
+        "status": 200,
+        "url": "https://ranterra.pages.dev/experiment/host-check",
+        "bytes": 988,
+        "sha256": "937cb30bc4461668fd0d519c86ec1c71be581e8cad62cd30cf43f1c28fc6c61a",
+        "headers": {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/missing.js",
+        "status": 404,
+        "url": "https://ranterra.pages.dev/missing.js",
+        "bytes": 390,
+        "sha256": "3389691901c0dd61c18943743b83307aa24b5be06c2e985abd4b7f1ed9d1cebb",
+        "headers": {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/assets/missing.wasm",
+        "status": 404,
+        "url": "https://ranterra.pages.dev/assets/missing.wasm",
+        "bytes": 390,
+        "sha256": "3389691901c0dd61c18943743b83307aa24b5be06c2e985abd4b7f1ed9d1cebb",
+        "headers": {
+          "content-type": "application/wasm",
+          "cache-control": "no-store",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/unknown-route",
+        "status": 404,
+        "url": "https://ranterra.pages.dev/unknown-route",
+        "bytes": 390,
+        "sha256": "3389691901c0dd61c18943743b83307aa24b5be06c2e985abd4b7f1ed9d1cebb",
+        "headers": {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/.git/config",
+        "status": 404,
+        "url": "https://ranterra.pages.dev/.git/config",
+        "bytes": 390,
+        "sha256": "3389691901c0dd61c18943743b83307aa24b5be06c2e985abd4b7f1ed9d1cebb",
+        "headers": {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      },
+      {
+        "path": "/.svn/entries",
+        "status": 404,
+        "url": "https://ranterra.pages.dev/.svn/entries",
+        "bytes": 390,
+        "sha256": "3389691901c0dd61c18943743b83307aa24b5be06c2e985abd4b7f1ed9d1cebb",
+        "headers": {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org https://overpass-api.de; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), microphone=(), geolocation=()"
+        }
+      }
+    ],
+    "tls": [
+      {
+        "offered": "default",
+        "accepted": true,
+        "negotiated": "TLSv1.3",
+        "authorized": true,
+        "cipher": "TLS_AES_256_GCM_SHA384",
+        "issuer": "Let's Encrypt",
+        "validTo": "Jan  9 16:23:35 2027 GMT"
+      },
+      {
+        "offered": "TLSv1",
+        "accepted": false,
+        "code": "ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION",
+        "message": "807F330602000000:error:0A00042E:SSL routines:ssl3_read_bytes:tlsv1 alert protocol version:../deps/openssl/openssl/ssl/record/rec_layer_s3.c:918:SSL alert number 70\n"
+      },
+      {
+        "offered": "TLSv1.1",
+        "accepted": false,
+        "code": "ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION",
+        "message": "807F330602000000:error:0A00042E:SSL routines:ssl3_read_bytes:tlsv1 alert protocol version:../deps/openssl/openssl/ssl/record/rec_layer_s3.c:918:SSL alert number 70\n"
+      },
+      {
+        "offered": "TLSv1.2",
+        "accepted": true,
+        "negotiated": "TLSv1.2",
+        "authorized": true,
+        "cipher": "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+        "issuer": "Let's Encrypt",
+        "validTo": "Jan  9 16:23:35 2027 GMT"
+      },
+      {
+        "offered": "TLSv1.3",
+        "accepted": true,
+        "negotiated": "TLSv1.3",
+        "authorized": true,
+        "cipher": "TLS_AES_256_GCM_SHA384",
+        "issuer": "Let's Encrypt",
+        "validTo": "Jan  9 16:23:35 2027 GMT"
+      }
+    ],
+    "httpRedirect": {
+      "status": 301,
+      "location": "https://ranterra.pages.dev/"
+    }
+  },
+  "customDomain": {
+    "name": "ranterra.davidkh.com",
+    "status": "pending",
+    "verification": {
+      "status": "pending",
+      "error_message": "CNAME record not set"
+    },
+    "validation": {
+      "status": "pending",
+      "method": "http"
+    },
+    "requiredDNS": {
+      "type": "CNAME",
+      "name": "ranterra",
+      "target": "ranterra.pages.dev",
+      "proxied": true,
+      "ttl": "Auto"
+    },
+    "dnsOAuthPermission": false
+  },
+  "visualVerification": {
+    "origin": "https://ranterra.pages.dev",
+    "registeredUEs": 4,
+    "activePDUSessions": 1,
+    "echoPacketsDelivered": 1,
+    "virtualIP": "10.45.0.1",
+    "screenshot": "docs/hosting-preview.jpg",
+    "geography": "Interactive OSM tiles rendered with visible attribution; no automated tile traffic or Overpass retrieval."
+  },
+  "assetManifest": {
+    "dist/404.html": "3389691901c0dd61c18943743b83307aa24b5be06c2e985abd4b7f1ed9d1cebb",
+    "dist/ANT_DESIGN_NOTICES.txt": "f65cb54afaf44dcc1edeea046c55bc0cb24698bceb9288601e5f918027be9241",
+    "dist/_headers": "a00203b00d1fcd2b778d587598dc2fb3789a13cb51d7da616c23b7df014a9aa3",
+    "dist/_redirects": "114862b8db424e291e79f7aa5706e939f900d39d215007a092925c7918b7f6be",
+    "dist/assets/engine.worker-DFJxSKfp.js": "92819934188751cf18f0a0ae30f60686ef3ef20a4ac634e04bc1ee68f19cfe73",
+    "dist/assets/geography-RZO-t2LB.css": "3c3faf7116e0ea3f4dd664bc9d6207bebf71dda2f9d3108b65527615011f2b2b",
+    "dist/assets/geography-ix_C3pNE.js": "8a067c2419f31f5795fc26daa20362410f9dfd5213e60bb2048dfeb94e427be9",
+    "dist/assets/index-CgKiSVnt.js": "f2a234b97bad1dd21703c3b30e4ac0465812d287d5750760653edadd3cd8e30f",
+    "dist/assets/index-kwKYoqQ2.css": "816bf385a5b00f1862218ecfdaf41dd798cfa05a4f5b15516040f6b4c2e325b9",
+    "dist/assets/maplibre-gl-worker-ox5X9dVz.js": "1341f56c8703b8a43082f4b685d0be1526dc9b31e33c0087e1f71e567cdfb881",
+    "dist/assets/ranterra_engine_bg-CZ-jJpbY.wasm": "62a72488449bae70e4de0dd35a043d13dbc1da86cafae139012ae519953bf4dd",
+    "dist/config.json": "8d516672b0ae30df0809b3d899fbfa06e13e43f85ee4884946eb3f8280d064db",
+    "dist/index.html": "937cb30bc4461668fd0d519c86ec1c71be581e8cad62cd30cf43f1c28fc6c61a",
+    "dist/paris-buildings.json": "9181ca2916e6e28ef7858160295e6af94cb14d818f44eeb2f50375372406b674"
+  }
+}

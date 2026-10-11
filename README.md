@@ -2,11 +2,13 @@
 
 Browser-native 5G research application: React/MapLibre/deck.gl with a browser-independent Rust engine running as WebAssembly in a Worker. Network emulation needs no backend. Geographic assets are optional external services.
 
-![Ant Design research workspace with registered UEs and virtual traffic](docs/preview.jpg)
+[Open the live Cloudflare Pages application](https://ranterra.pages.dev) — static hosting; computation runs in your browser.
+
+![Live Ant Design workspace with authenticated UEs and virtual traffic](docs/hosting-preview.jpg)
 
 The workspace follows [Ant Design's visual language](https://ant.design/design.md), with a map, live network metrics, protocol inspection, entity controls, results dialogs and responsive inspectors. [Interface design and validation](docs/ui-design.md).
 
-**Current build: 1.0.0-rc.1. The requested production v1.0 release gates are not all satisfied.** See [release evidence and blockers](docs/V1_RELEASE_REPORT.md). This is a synthetic laboratory implementation of a documented subset, not a carrier core, certification of 3GPP compliance, or standardized 6G implementation.
+**Current build: 1.0.0-rc.1. Release gates pass for the documented subset on the verified Pages origin; stable release publication is withheld.** See [release evidence and blockers](docs/V1_RELEASE_REPORT.md). This is a synthetic laboratory implementation of a documented subset, not a carrier core, certification of 3GPP compliance, or standardized 6G implementation.
 
 ## Run
 
@@ -28,7 +30,7 @@ npm run build
 node scripts/serve-dist.mjs
 ```
 
-Open http://127.0.0.1:4173. This verification server serves **only static `dist/` assets** and applies the included hosting headers. Nothing is published externally. `npm run preview` also serves the build but does not apply hosting `_headers`.
+Open http://127.0.0.1:4173. This verification server serves **only static `dist/` assets** and applies the included hosting headers. These commands serve locally; the public demo is deployed separately. `npm run preview` also serves the build but does not apply hosting `_headers`.
 
 ## Run an experiment
 

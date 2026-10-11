@@ -1,6 +1,6 @@
 {
   "reference": "OWASP ASVS 5.0.0",
-  "scope": "All Level 1 requirements, static single-user browser application; not certification",
+  "scope": "All Level 1 requirements, static single-user browser application at https://ranterra.pages.dev; not certification. Custom domain excluded until DNS/certificate verification.",
   "date": "2026-10-11",
   "source": "https://github.com/OWASP/ASVS/tree/v5.0.0",
   "requirements": [
@@ -78,9 +78,9 @@
     },
     {
       "id": "v5.0.0-3.2.1",
-      "status": "PASS LOCAL",
-      "assessment": "Static asset MIME/nosniff/CSP; imports are not exposed as server resources. Hosted headers require verification.",
-      "evidence": "tests/application.spec.ts; public/_headers"
+      "status": "PASS HOSTED",
+      "assessment": "Live Pages responses enforce nosniff/CSP and correct JS/WASM MIME; untrusted imports remain local data. Chromium/Firefox hosted checks pass.",
+      "evidence": "tests/application.spec.ts; public/_headers; docs/hosting-evidence.json"
     },
     {
       "id": "v5.0.0-3.2.2",
@@ -96,9 +96,9 @@
     },
     {
       "id": "v5.0.0-3.4.1",
-      "status": "PENDING HOST",
-      "assessment": "One-year HSTS provided; HTTPS host not deployed/verified.",
-      "evidence": "public/_headers; docs/deployment.md"
+      "status": "PASS HOSTED",
+      "assessment": "One-year HSTS verified on live HTML, configuration, JavaScript, WASM and 404 responses at the Pages origin. Custom domain remains outside verified scope.",
+      "evidence": "public/_headers; docs/deployment.md; docs/hosting-evidence.json"
     },
     {
       "id": "v5.0.0-3.4.2",
@@ -126,9 +126,9 @@
     },
     {
       "id": "v5.0.0-4.1.1",
-      "status": "PASS LOCAL",
-      "assessment": "Static response MIME verified locally; hosting must apply correct JS/WASM MIME.",
-      "evidence": "scripts/serve-dist.mjs; tests/application.spec.ts"
+      "status": "PASS HOSTED",
+      "assessment": "Actual deployed worker JavaScript and WASM MIME/magic verified against the CI manifest and in both hosted browsers.",
+      "evidence": "scripts/serve-dist.mjs; tests/application.spec.ts; docs/hosting-evidence.json"
     },
     {
       "id": "v5.0.0-4.4.1",
@@ -372,27 +372,27 @@
     },
     {
       "id": "v5.0.0-12.1.1",
-      "status": "PENDING HOST",
-      "assessment": "TLS protocol selection belongs to the authorized hosting configuration.",
-      "evidence": "docs/deployment.md"
+      "status": "PASS HOSTED",
+      "assessment": "Pages endpoint negotiates TLS 1.3 by default, accepts TLS 1.2/1.3 and rejects TLS 1.0/1.1 with server protocol-version alerts. This is a finite version probe, not a complete TLS audit.",
+      "evidence": "docs/deployment.md; docs/hosting-evidence.json"
     },
     {
       "id": "v5.0.0-12.2.1",
-      "status": "PENDING HOST",
-      "assessment": "External providers require HTTPS; application origin HTTPS/redirect not remotely verified.",
-      "evidence": "src/config.ts; docs/deployment.md"
+      "status": "PASS HOSTED",
+      "assessment": "Pages origin redirects HTTP to HTTPS; application/provider configuration requires HTTPS or same-origin URLs. No insecure provider fallback or certificate bypass is implemented.",
+      "evidence": "src/config.ts; docs/deployment.md; docs/hosting-evidence.json"
     },
     {
       "id": "v5.0.0-12.2.2",
-      "status": "PENDING HOST",
-      "assessment": "Public certificate verification requires the selected deployment.",
-      "evidence": "docs/deployment.md"
+      "status": "PASS HOSTED",
+      "assessment": "Public Pages certificate hostname/chain verified by Node TLS and both real hosted browsers; interactive geographic tiles loaded through normal browser certificate verification. Custom-domain certificate is pending and excluded.",
+      "evidence": "docs/deployment.md; docs/hosting-evidence.json"
     },
     {
       "id": "v5.0.0-13.4.1",
-      "status": "PASS LOCAL",
-      "assessment": "Only dist is deployed; artifact verifier disallows source control metadata.",
-      "evidence": "scripts/verify-build.mjs"
+      "status": "PASS HOSTED",
+      "assessment": "All 14 CI artifact hashes verified before deploying only dist; actual /.git/config and /.svn/entries requests return 404.",
+      "evidence": "scripts/verify-build.mjs; docs/hosting-evidence.json"
     },
     {
       "id": "v5.0.0-14.2.1",

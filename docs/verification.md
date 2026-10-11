@@ -104,3 +104,21 @@ The intervening [run 38155390325](https://github.com/khvedela/RANterra/actions/r
 The actual Wrangler 4.149.0 Pages dev runtime rejected the old broad rewrite and returned HTML/200 for nonexistent assets. This behavior was not reproduced by the older bespoke local server; its earlier green header checks did not prove the host gate. The candidate now includes a 404 page and supported explicit rewrites; the local server reads the actual rewrite file.
 
 All 30 production browser tests passed against Wrangler Pages dev in 2.4 minutes, followed by both strengthened static-host tests (real worker JavaScript/WASM MIME and WASM magic, missing assets, unknown paths and deep refresh) in 9.6 seconds. The bespoke local server passed its two updated routing checks. Lint, TypeScript and a full Rust/WASM production build pass; all 14 artifact hashes reproduce between web/full builds. The engine and interface are unchanged. CI revalidation, account authentication and actual HTTPS/custom-domain verification remain pending. No hosted deployment or release publication has yet occurred.
+
+## Verified Pages deployment and map correction
+
+The routing candidate `f4f113a` passed [run 38158740253](https://github.com/khvedela/RANterra/actions/runs/38158740253) and 30 tests against the actual HTTPS Pages origin. Subsequent visual verification found competing resize handlers restoring an obsolete camera viewport. A centered-cell regression failed in both browsers before the fix; it retains the requirement that the marker remain within 2 CSS pixels of the independent canvas center.
+
+Corrected source **`c9681f9f01b3871d1e170a0d26fe5e0849c909d8`** passed [both jobs in run 38160644943](https://github.com/khvedela/RANterra/actions/runs/38160644943): 66 Rust tests, 13 independently authored peers plus six AUTS negative subcases, 30 codec fixtures, actual WASM/worker/replay, 32 Chromium/Firefox checks (3.7 minutes), audits/licenses/KDF regeneration, benchmarks and 14 reproducible artifact hashes. The sanitizer job completed 195,219 executions in 61 seconds. The local full browser suite passed in 2.5 minutes.
+
+All 14 downloaded CI asset hashes and WASM magic matched before deployment. The exact artifact, 7,132,757 deployment bytes, is live at https://ranterra.pages.dev and [immutable deployment 5ecdd003](https://5ecdd003.ranterra.pages.dev). **All 32 actual hosted browser checks passed in 2.8 minutes**, including DPR-2 wide startup/reload, resize during recentering, genuine secured registration/session/echo/release, offline loaded computation, persistence/replay and worker/storage recovery. Third-party geography is blocked by these tests.
+
+Independent live HTTP/body-hash checks verify CI asset bytes, worker/WASM MIME and magic, immutable assets, HTML/config revalidation, known deep links, no-store 404s and inaccessible source-control metadata. Node TLS probes negotiate TLS 1.3 by default, accept verified TLS 1.2/1.3 certificates and receive server protocol-version alerts for TLS 1.0/1.1. A normal interactive browser visit rendered OSM tiles with attribution and real four-UE registration/session/echo state; [screenshot](hosting-preview.jpg). [Machine-readable evidence](hosting-evidence.json) includes response headers, hashes, TLS outcomes, CI/artifact/deployment identifiers and the finite soak measurement.
+
+Run against the already-deployed production origin:
+
+```sh
+RANTERRA_TEST_ORIGIN=https://ranterra.pages.dev npm run test:browser
+```
+
+The custom domain `ranterra.davidkh.com` is associated but awaits its CNAME. It is excluded from the verified TLS/ASVS/hosting scope until independently checked. This follow-up changes documentation/evidence only and leaves the remotely tested application, workflow and 14 deployment assets unchanged. Release tagging/publication remains withheld.
