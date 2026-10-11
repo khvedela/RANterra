@@ -112,6 +112,7 @@ export function WorkspacePanel({
       onClose={onClose}
       size={360}
       getContainer={false}
+      rootStyle={{ position: "fixed" }}
       className="workspace-drawer"
     >
       <div className={`${side}-panel`}>{children}</div>

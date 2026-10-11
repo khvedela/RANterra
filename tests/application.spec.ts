@@ -643,6 +643,8 @@ test("mobile workspace keeps the map usable and opens editable inspectors in dra
   await expect(setup.getByRole("combobox", { name: "RF model" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(setup).toBeHidden();
+  // An inline Ant drawer otherwise follows document scroll and can open offscreen.
+  await page.evaluate(() => window.scrollTo(0, 350));
   await page
     .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
     .click();
@@ -650,6 +652,10 @@ test("mobile workspace keeps the map usable and opens editable inspectors in dra
     name: "Entity inspector",
     exact: true,
   });
+  await expect(inspector).toBeInViewport({ ratio: 0.99 });
+  await expect
+    .poll(async () => Math.round((await inspector.boundingBox())!.y))
+    .toBe(0);
   await expect(inspector.getByLabel("Entity name")).toBeVisible();
   await inspector.getByLabel("Entity name").fill("Mobile research UE");
   await inspector.getByLabel("Entity name").press("Tab");
