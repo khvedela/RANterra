@@ -171,7 +171,14 @@ test("static hosting MIME, headers and route refresh", async ({ request }) => {
   const js = html.match(/src="([^"]+\.js)"/)?.[1];
   expect(js).toBeTruthy();
   const asset = await request.get(js!);
-  expect(asset.headers()["cache-control"]).toContain("immutable");
+  expect(asset.headers()["cache-control"]).toBe(
+    "public, max-age=31536000, immutable",
+  );
+  for (const path of ["/", "/index.html", "/config.json"]) {
+    expect((await request.get(path)).headers()["cache-control"]).toBe(
+      "no-cache",
+    );
+  }
   expect((await request.get("/missing.js")).status()).toBe(404);
 });
 
@@ -539,5 +546,38 @@ test("untrusted labels remain text and blocked storage leaves computation usable
     .click();
   await expect(
     page.getByRole("button", { name: "Exchange complete", exact: true }),
+  ).toBeVisible();
+});
+
+test("unavailable WebGL leaves a visible map error and usable simulation", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      kind: string,
+      ...args: unknown[]
+    ) {
+      if (/webgl|experimental-webgl/.test(kind)) return null;
+      return Reflect.apply(original, this, [kind, ...args]);
+    } as typeof original;
+  });
+  await page.reload();
+  await expect(page.locator(".map-warning")).toContainText(
+    "Map initialization failed",
+  );
+  await expect(
+    page.getByRole("button", { name: "Run simulation", exact: true }),
+  ).toBeEnabled();
+  await page.getByLabel("Simulation speed").selectOption("10");
+  await page
+    .getByRole("button", { name: "Run simulation", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Exchange complete", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Results", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Experiment results" }),
   ).toBeVisible();
 });

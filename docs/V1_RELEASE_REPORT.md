@@ -1,6 +1,6 @@
 # RANterra v1 release report
 
-**2026-10-11 — candidate 1.0.0-rc.1, target 1.0.0. Release acceptance: BLOCKED.** The four latest engineering work areas are implemented and locally validated for the supported research profile. A green remote CI run for this candidate and an authorized HTTPS deployment verification are still required. The user has now authorized committing and pushing this candidate to obtain remote CI evidence. CI is pending; deployment and publication remain explicitly unauthorized.
+**2026-10-11 — candidate 1.0.0-rc.1, target 1.0.0. Release acceptance: BLOCKED.** The four latest engineering work areas are implemented and locally validated for the supported research profile. A green remote CI run for this candidate and an authorized HTTPS deployment verification are still required. The user has now authorized committing and pushing this candidate to obtain remote CI evidence. The first candidate CI run passed native/runtime/protocol/Chromium checks and sanitizer fuzzing but failed Firefox startup. Corrective validation is in progress; deployment and publication remain explicitly unauthorized.
 
 This is a functioning browser-only research application with actual cryptography, encoded protocols and a virtual data plane. It is not a complete carrier core, an interoperability certification or standardized 6G implementation. Local validation is not substituted for hosting evidence.
 

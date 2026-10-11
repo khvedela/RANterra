@@ -1,0 +1,28 @@
+# Free static hosting options
+
+Reviewed 2026-10-11. **Recommendation: Cloudflare Pages Free**, subject to the actual hosted acceptance checks. This is a recommendation only: no account, project, deployment, custom domain or billing configuration was created.
+
+RANterra runs protocol/RF computation in each visitor's browser. The host serves HTML, JavaScript, WASM, fonts and optional data; it does not run a 5G backend. The locally verified bundle is approximately 6.58 MB across 38 files, with a 3.28 MB WASM file. There is no need to rent a server.
+
+| Option | Current free allowance / fit | Trade-off |
+|---|---|---|
+| **Cloudflare Pages Free** | Static requests and bandwidth are advertised as unlimited; HTTPS is included. Free limits include 500 builds/month, 20,000 files and 25 MiB per asset. Our current files fit easily. | Requires a free account and real hosted verification. Existing `_headers`/`_redirects` are close to its format; provider policies still apply. |
+| Cloudflare Workers Static Assets | Asset requests are free/unlimited, with no asset-storage charge. Can serve the app without a Worker script. | Equally plausible future option, but needs asset/routing configuration; invoking server-side Worker code introduces separate limits. No server computation is needed here. |
+| GitHub Pages | Public-repository hosting with a 1 GB site limit and soft 100 GB/month bandwidth limit. | Current code assumes origin-root hosting; a project subpath needs adaptation, and the security-header/routing requirements need host-specific verification. |
+| Netlify Free | 300 credits/month under current credit-based plans; 15 credits per production deploy, 20 credits/GB bandwidth and 2 credits/10,000 requests. | Easier to exhaust with WASM downloads. Free projects pause when credits run out. Qualifying open-source projects can apply for a separate sponsored plan. |
+
+Sources: [Pages product/pricing](https://www.cloudflare.com/products/pages/), [Pages limits](https://developers.cloudflare.com/pages/platform/limits/), [Workers asset billing](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/), [GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits), [Netlify pricing](https://www.netlify.com/pricing/), [Netlify free-plan exhaustion](https://www.netlify.com/pricing/pro-vs-free/), [Netlify open-source program](https://www.netlify.com/open-source/). Pricing and terms can change; verify again when choosing the host.
+
+## Suggested deployment approach, after authorization
+
+Use the already-tested `dist/` artifact from a successful GitHub Actions run and upload it to a Pages Direct Upload project. Its supplied `pages.dev` address avoids buying a domain. This also avoids rebuilding Rust/WASM in a second environment. Direct Upload cannot later be switched to Git integration within the same project; a new project would be required. See [official Direct Upload documentation](https://developers.cloudflare.com/pages/get-started/direct-upload/).
+
+Keep deployment manual until the hosted gates pass. Do not connect automatic branch deployment or add a publishing workflow merely to run validation. The current GitHub workflow only tests and retains an artifact.
+
+Before approval, select the geographic provider policy. Hosting being free does not grant unlimited public OSM tiles, geocoding or Overpass capacity. Loaded computation and bundled geography remain local; optional external providers have their own terms and limits. A custom domain is optional and may cost money. No paid functions, database or storage product is needed for core emulation.
+
+## Checks still requiring a real host
+
+Verify HTTPS/certificate/HSTS, CSP, WASM/worker MIME, root/deep-link refresh, stale/missing asset behavior, cache revalidation, configured map attribution/provider access, browser storage and full registration → PDU → echo → release. Cloudflare merges overlapping `_headers` values with commas, so immutable asset caching must not overlap a global `no-cache` rule. That conflict was fixed and the local verifier now combines matching rules. See [header semantics](https://developers.cloudflare.com/pages/configuration/headers/) and [default caching/SPA behavior](https://developers.cloudflare.com/pages/configuration/serving-pages/).
+
+The local static server is a verification harness, not a complete Cloudflare emulator. In particular, the catch-all SPA rewrite and missing-asset responses must be checked on the selected host before claiming the deployment gate passed. Follow [deployment.md](deployment.md); do not infer a hosted pass from a local one.

@@ -50,14 +50,22 @@ const server = createServer(async (req, res) => {
     const headers = {
       "Content-Type": mime[extname(file)] ?? "application/octet-stream",
     };
+    const custom = {};
     for (const r of rules) {
       const pattern = new RegExp(
         "^" +
           r.path.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*") +
           "$",
       );
-      if (pattern.test(path)) Object.assign(headers, r.headers);
+      // Pages combines matching _headers rules rather than using last-write-wins.
+      // Keep these separate from the server's MIME defaults, which are overridden.
+      if (pattern.test(path)) {
+        for (const [name, value] of Object.entries(r.headers)) {
+          custom[name] = custom[name] ? `${custom[name]}, ${value}` : value;
+        }
+      }
     }
+    Object.assign(headers, custom);
     const data = await readFile(file);
     res.writeHead(200, headers);
     res.end(req.method === "HEAD" ? undefined : data);

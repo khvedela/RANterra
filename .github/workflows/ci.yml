@@ -18,6 +18,8 @@ jobs:
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          cache-on-failure: true
       - run: cargo install wasm-pack --version 0.15.0 --locked
       - run: cargo install cargo-audit --version 0.22.2 --locked
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -34,7 +36,17 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:wasm && npm run test:worker && npm run test:replay && npm run test:protocols
       - run: npx playwright install --with-deps chromium firefox
-      - run: npm run test:browser
+      - name: Browser graphics preflight
+        run: xvfb-run --auto-servernum node scripts/check-browser-graphics.mjs
+      - run: xvfb-run --auto-servernum npm run test:browser
+        env:
+          RANTERRA_HEADED: "1"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: failure()
+        with:
+          name: browser-failure-diagnostics
+          path: test-results/
+          retention-days: 7
       - run: npm run test:soak
       - run: npm audit --audit-level=moderate
       - run: cargo audit && cargo audit --file validation/fuzz/Cargo.lock

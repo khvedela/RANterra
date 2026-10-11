@@ -74,3 +74,11 @@ node scripts/test-worker.mjs --benchmark
 Install cargo-audit 0.22.2 as described in CI. Go's validation toolchain is pinned independently. Run the soak after browser tests, since Playwright clears `test-results`. The standalone test peer is not an unmodified external mobile core; see [exact boundary](interop-validation.md).
 
 Benchmarks cover the existing 16-cell/128-UE/467-building/1,225-grid-sample UMa scenario. Native initialization median/max **22.45/25.14 ms**; WASM **46.03/77.29 ms**; worker reload **49.07/53.90 ms**. Native peak RSS **10,174,464 bytes** excludes compilation; WASM linear memory **6,488,064 bytes**. Full data and memory definitions are in the release report. No RF fidelity was reduced. Geography chunk/loaders.gl/wasm-bindgen fallback build warnings remain visible; successful builds are not described as warning-free.
+
+## Remote candidate validation follow-up
+
+Candidate `908533308ee46318d28bb448a3056bd17aef68ce` was committed and pushed with explicit user authorization. [Run 38147397454](https://github.com/khvedela/RANterra/actions/runs/38147397454) passed native tests, lint, production build, actual WASM/worker/replay, independent peers and Chromium (11 tests). The separate Linux sanitizer job passed 197,732 inputs in 61 seconds. The validation job failed because all 11 Firefox tests could not find the application controls at startup. Later audit/reproducibility steps were skipped; this run is not a full pass.
+
+The follow-up adds a headless/headed Firefox WebGL2 probe, runs browser CI under Xvfb, retains failure screenshots/traces, and catches map-construction errors so unsupported graphics cannot unmount the entire application. Normal browser tests still require a real map canvas and no map warning; a separate negative test checks graceful behavior when WebGL is deliberately unavailable. Timeouts and protocol assertions were not relaxed. The next remote result will determine whether the environment diagnosis is correct.
+
+Hosting research also found conflicting global `no-cache` and immutable-asset rules under Cloudflare's comma-merge behavior. Cache rules now avoid that overlap, and the local server combines matching custom headers. Targeted Chromium/Firefox header tests pass. No deployment was performed.

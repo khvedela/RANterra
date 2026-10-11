@@ -1,6 +1,6 @@
 # Static production deployment
 
-No emulation backend is required. This candidate has been tested from local production static output; no hosted deployment has been performed or authorized.
+No emulation backend is required. For the zero-server-budget recommendation and alternatives, see [free hosting options](hosting-options.md). This candidate has been tested from local production static output; no hosted deployment has been performed or authorized.
 
 ## Build prerequisites
 

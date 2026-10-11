@@ -90,7 +90,7 @@ cargo run --locked -p ranterra-engine --example replay -- examples/minimal.json
 - [RF assumptions and validation](docs/radio-validation.md)
 - [Research reproducibility](docs/reproducibility.md)
 - [Security and privacy](docs/security.md)
-- [Static deployment](docs/deployment.md)
+- [Static deployment](docs/deployment.md) and [free hosting options](docs/hosting-options.md)
 - [Verification record](docs/verification.md)
 - [OSM attribution](docs/data-attribution.md)
 - [Dependency inventory](docs/DEPENDENCIES.json)

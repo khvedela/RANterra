@@ -45,44 +45,56 @@ export default function NetworkMap(props: Props) {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     if (!container.current) return;
-    const m = new maplibregl.Map({
-      container: container.current,
-      center: props.scenario.center,
-      zoom: 15.5,
-      maxZoom: 19,
-      minZoom: 3,
-      attributionControl: { compact: false },
-      style: {
-        version: 8,
-        sources: config.tiles
-          ? {
-              basemap: {
-                type: "raster",
-                tiles: config.tiles ? [config.tiles] : [],
-                tileSize: 256,
-                attribution: config.attribution,
-              },
-            }
-          : {},
-        layers: [
-          {
-            id: "background",
-            type: "background",
-            paint: { "background-color": "#e6e9e3" },
-          },
-          ...(config.tiles
-            ? [
-                {
-                  id: "base",
-                  type: "raster" as const,
-                  source: "basemap",
-                  paint: { "raster-saturation": -0.65, "raster-opacity": 0.72 },
+    let m: maplibregl.Map;
+    try {
+      m = new maplibregl.Map({
+        container: container.current,
+        center: props.scenario.center,
+        zoom: 15.5,
+        maxZoom: 19,
+        minZoom: 3,
+        attributionControl: { compact: false },
+        style: {
+          version: 8,
+          sources: config.tiles
+            ? {
+                basemap: {
+                  type: "raster",
+                  tiles: config.tiles ? [config.tiles] : [],
+                  tileSize: 256,
+                  attribution: config.attribution,
                 },
-              ]
-            : []),
-        ],
-      },
-    });
+              }
+            : {},
+          layers: [
+            {
+              id: "background",
+              type: "background",
+              paint: { "background-color": "#e6e9e3" },
+            },
+            ...(config.tiles
+              ? [
+                  {
+                    id: "base",
+                    type: "raster" as const,
+                    source: "basemap",
+                    paint: {
+                      "raster-saturation": -0.65,
+                      "raster-opacity": 0.72,
+                    },
+                  },
+                ]
+              : []),
+          ],
+        },
+      });
+    } catch (error) {
+      container.current.replaceChildren();
+      setMapError(
+        `Map initialization failed: ${String(error).slice(0, 160)}. WebGL2 is required for the map. Local simulation and exports remain available; enable graphics acceleration and reload.`,
+      );
+      return;
+    }
     map.current = m;
     const deck = new MapLibreOverlay({ interleaved: false, layers: [] });
     overlay.current = deck;

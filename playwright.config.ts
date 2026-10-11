@@ -4,6 +4,8 @@ export default defineConfig({
   timeout: 30000,
   workers: 1,
   use: {
+    headless: process.env.RANTERRA_HEADED !== "1",
+    screenshot: "only-on-failure",
     baseURL: "http://127.0.0.1:4173",
     viewport: { width: 1600, height: 1100 },
     trace: "retain-on-failure",
