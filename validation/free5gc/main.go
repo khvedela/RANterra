@@ -10,8 +10,8 @@ import (
 	"github.com/free5gc/nas"
 	"github.com/free5gc/ngap"
 	"github.com/free5gc/ngap/ngapType"
+	"io"
 	"os"
-"io"
 )
 
 type Frame struct {
@@ -21,14 +21,23 @@ type Frame struct {
 }
 
 func main() {
-    defer func() { if failure:=recover(); failure!=nil { fmt.Fprintf(os.Stderr,"Independent validator rejected input: %v\n",failure); os.Exit(1) } }()
+	defer func() {
+		if failure := recover(); failure != nil {
+			fmt.Fprintf(os.Stderr, "Independent validator rejected input: %v\n", failure)
+			os.Exit(1)
+		}
+	}()
 	var frames []Frame
 	if err := json.NewDecoder(io.LimitReader(os.Stdin, 1_000_000)).Decode(&frames); err != nil {
 		panic(err)
 	}
-	if len(frames) != 30 { panic("Expected exactly 30 engine-generated frames") }
-for _, f := range frames {
-if len(f.Hex) > 131072 { panic("Frame exceeds validation limit") }
+	if len(frames) != 30 {
+		panic("Expected exactly 30 engine-generated frames")
+	}
+	for _, f := range frames {
+		if len(f.Hex) > 131072 {
+			panic("Frame exceeds validation limit")
+		}
 		wire, err := hex.DecodeString(f.Hex)
 		if err != nil {
 			panic(err)

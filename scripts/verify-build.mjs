@@ -14,6 +14,12 @@ async function files(dir) {
 const paths = (await files("dist")).sort();
 assert(paths.some((p) => /engine\.worker-.*\.js$/.test(p)));
 assert(paths.some((p) => p.endsWith(".wasm")));
+assert(
+  paths.every(
+    (p) => !/(?:^|\/)(?:\.git|\.svn|node_modules|Cargo\.lock)(?:\/|$)/.test(p),
+  ),
+  "Unexpected source/dependency metadata in deployment",
+);
 const hashes = {};
 for (const path of paths) {
   const b = await readFile(path);

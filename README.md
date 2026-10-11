@@ -6,7 +6,7 @@ Browser-native 5G research application: React/MapLibre/deck.gl with a browser-in
 
 ## Run
 
-Use Node.js 24, npm, rustup with Rust 1.97.1 (pinned in `rust-toolchain.toml`), and wasm-pack 0.15.0. Put rustup's `~/.cargo/bin` on PATH. Desktop Chromium and Firefox are covered by automated tests; WebGL2, WASM, Workers and IndexedDB are required.
+Use Node.js 24.18.0, npm, rustup with Rust 1.97.1 (pinned in `rust-toolchain.toml`), and wasm-pack 0.15.0. Put rustup's `~/.cargo/bin` on PATH. The repository `.npmrc` requires normal peer resolution; do not regenerate the lockfile with legacy peer handling. Desktop Chromium and Firefox are covered by automated tests; WebGL2, WASM, Workers and IndexedDB are required.
 
 ```sh
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -34,7 +34,7 @@ Open http://127.0.0.1:4173. This verification server serves **only static `dist/
 4. Inspect NAS, NGAP, 5GSM, GTP-U and IPv4 events. Protected NAS rows show verified decoded content alongside original ciphertext. The gNodeB only relays NAS ciphertext.
 5. Use **Deregister UE** for protected NAS deregistration and logical N2 context release. Reset before registering again.
 6. Draw a trajectory by clicking map waypoints, choose speed in m/s, and finish the trajectory. Movement runs in 100 ms virtual ticks for the configured duration. A3-style changes are **reassociation, not protocol handover**. Reassociation invalidates the old registration/session; reset is needed to reconnect.
-7. Select a laboratory fault to reproduce authentication failures. Each UE has independent contexts. No real subscriber credential import is supported.
+7. Select a laboratory fault to reproduce authentication failures, or configure signaling delay/loss and N2 rejection. `examples/signaling-recovery.json` combines a lost Security Mode Complete with a second UE configured for N2 rejection. Each UE has independent contexts. No real subscriber credential import is supported.
 8. Export scenario, event log, or results. In Results, **Export experiment / Save run** capture the timestamped Rust command journal and current virtual-time checkpoint. Import or **Restore saved run** reconstructs active sessions and in-flight packets without exporting keys. **Compare experiment** replays another run for comparison. Save copy still stores initial configuration.
 
 Start/pause/resume/step/reset, seeds, playback speed, duration, coverage layers, cell/UE configuration, and geographic navigation remain in the existing workspace. Scenario edits reset execution transactionally. The latest 500 filtered timeline rows are rendered; exports retain the bounded full history (16,384 rows), with an explicit limit indicator.
@@ -42,14 +42,14 @@ Start/pause/resume/step/reset, seeds, playback speed, duration, coverage layers,
 ## Implemented scope
 
 - Synthetic null-scheme SUCI and subscriber provisioning; MILENAGE AUTN/SQN verification, RES*/XRES* and HRES*/HXRES*, KAUSF/KSEAF/KAMF/NAS keys.
-- NIA2/NEA2 NAS security, independent directional COUNTs, Security Mode capability replay and initial NAS container verification, Registration Accept/Complete, failure isolation, lab timeout and deregistration.
+- NIA2/NEA2 NAS security, independent directional COUNTs, Security Mode capability replay and initial NAS container verification, Registration Accept/Complete, failure isolation, T3560/T3550 retransmissions, normal initial-registration T3510/T3511/T3502 recovery and deregistration.
 - Real OxiRush NAS/NGAP codecs; InitialUEMessage, UL/DLNASTransport, PDU resource setup/release and UE context release.
 - Configurable DNN/S-NSSAI (SST + optional SD), per-policy capacity and protected rejects/backoff; one IPv4 PDU session per UE, protected N1 SM transport, local SMF/UPF control, distinct directional TEIDs, IPv4/ICMP echo, GTP-U validation and per-session traffic statistics.
 - UMi/UMa LOS/NLOS path loss from TR 38.901 v18.0.0 within explicitly enforced ranges, optional sector pattern and seeded shadowing, thermal noise and full-load co-channel SINR.
 - Deterministic waypoint mobility, coverage loss and configurable A3 hysteresis/TTT in scenario radio configuration.
 - Native execution, WASM execution, production worker tests, Chromium/Firefox automation, input bounds, provider configuration, static hosting headers, CI and dependency/license checks.
 
-Important reductions: no RRC/AS security/PHY, NG setup or real SCTP/UDP; no PFCP (SMF/UPF control is collocated); one IPv4 session per UE with fixed QFI/5QI; no NAS timer retransmissions or AUTS resynchronization; no protocol handover, automatic reconnection, terrain or height-aware building RF. Session control/deregistration are atomic at the current virtual time; echo uses scheduled virtual delays. These are material limits, not transparent substitutes for omitted protocol functionality.
+Important reductions: no RRC/AS security/PHY, NG setup or real SCTP/UDP; no PFCP (SMF/UPF control is collocated); one IPv4 session per UE with fixed QFI/5QI; no emergency/NB-N1 timer variants or mobility registration update; no protocol handover, automatic reconnection, terrain or height-aware building RF. Session control and echo use scheduled virtual delays; deregistration remains atomic at the current virtual time after explicit session release. These are material limits, not transparent substitutes for omitted protocol functionality.
 
 ## Verification
 
@@ -62,6 +62,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 npx playwright install chromium firefox
 npm run test:browser
 npm run test:replay
+npm run test:inputs
 # Independent codec validator additionally requires Go 1.27.2 (validation toolchain only):
 npm run test:protocols
 npm audit --audit-level=moderate
@@ -97,3 +98,7 @@ cargo run --locked -p ranterra-engine --example replay -- examples/minimal.json
 Geographic providers are configured in `public/config.json` (deployed as `/config.json`, no rebuild needed). Place search is disabled by default; coordinate navigation remains available. Configure a permitted provider before enabling geocoding. OSM Standard tiles are for light interactive use, with attribution and browser caching, not bulk download or production traffic at arbitrary scale. See the [current tile policy](https://operations.osmfoundation.org/policies/tiles/) and [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/).
 
 Code is [MIT](LICENSE). OSM-derived datasets remain ODbL. Introduced direct Rust dependencies use MIT/Apache-2.0; no AGPL code was integrated. Fonts retain OFL and relevant data retain attribution terms. This software must never be supplied with production subscriber keys.
+
+Independent endpoint and bounded reliability checks: `npm run test:protocols` (Go 1.27.2 validation toolchain) and `npm run test:soak` after building. The latter defaults to 128 real WASM lifecycle/replay/free cycles; `RANTERRA_SOAK_CYCLES=16384 npm run test:soak` reproduces the extended campaign. See [interoperability evidence and limits](docs/interop-validation.md). Stable v1 release gates remain open.
+
+The SMF/AUTS follow-up adds independently driven shared session allocation/policy/release and T3592 boundary validation. Import `examples/auts-resynchronization.json` (or choose `SqnOutOfSync`) to inspect real cause-21/AUTS recovery followed by secured registration and virtual traffic. The per-UE signaling controls now expose deterministic session delay, bounded message loss and an encoded N2 resource failure. New recordings use profile 3; existing profile-2 recordings retain legacy atomic execution. Registration retransmissions and session cleanup are covered by native, independent-peer and browser tests. See [current release gates](docs/V1_RELEASE_REPORT.md) and [exact validation boundary](docs/interop-validation.md).

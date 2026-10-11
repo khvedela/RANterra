@@ -1,4 +1,5 @@
-//! Generate the checked-in portable service-policy experiment.
+//! Generate a current-profile service-policy experiment.
+//! The checked-in profile-2 recording remains a legacy compatibility fixture.
 use ranterra_engine::{
     experiment::{Action, Experiment},
     model::{Scenario, SessionRequest, Snssai},
@@ -25,6 +26,7 @@ fn main() -> Result<(), String> {
     run.advance(1000)?;
     run.execute(Action::Establish { ue_id: 101 })?;
     run.execute(Action::Establish { ue_id: 102 })?;
+    run.advance(100)?;
     run.execute(Action::Echo {
         ue_id: 101,
         loss_percent: 0,
@@ -33,6 +35,7 @@ fn main() -> Result<(), String> {
     run.execute(Action::Release { ue_id: 101 })?;
     run.advance(9900)?;
     run.execute(Action::Establish { ue_id: 102 })?;
+    run.advance(100)?;
     run.execute(Action::Echo {
         ue_id: 102,
         loss_percent: 100,

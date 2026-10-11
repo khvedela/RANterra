@@ -1,3 +1,4 @@
+mod control;
 use crate::research::MobilityModel;
 use crate::{
     model::*,
@@ -5,6 +6,7 @@ use crate::{
     radio::{self, LogDistance, RadioModel, Sample},
     transport::*,
 };
+use control::Control;
 use serde::Serialize;
 use std::collections::BTreeMap;
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -17,6 +19,8 @@ pub enum UeState {
     RegistrationAccepted,
     Registered,
     RegistrationRejected,
+    RegistrationUnconfirmed,
+    RegistrationRetry,
     ReassociationRequired,
     Deregistered,
 }
@@ -58,6 +62,8 @@ pub struct Event {
 }
 #[derive(Serialize)]
 pub struct Snapshot {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub session_pending: Vec<u32>,
     pub time_ms: u64,
     pub started: bool,
     pub pending: usize,
@@ -74,14 +80,13 @@ pub struct Snapshot {
 pub trait Controller {
     fn propose(&mut self, snapshot: &Snapshot) -> Vec<String>;
 }
-#[derive(Clone, Debug, Serialize)]
-pub struct SessionFailure {
-    pub domain: String,
-    pub cause: u8,
-    pub reason: String,
-    pub retry_at_ms: Option<u64>,
-}
+pub use crate::smf::SessionFailure;
 pub struct Engine<T: Transport = VirtualTransport> {
+    pub(crate) legacy: bool,
+    control_queue: BTreeMap<(u64, u64), (u32, Control)>,
+    control_sequence: u64,
+    control_pending: std::collections::BTreeSet<u32>,
+    loss_used: BTreeMap<u32, u8>,
     pub scenario: Scenario,
     pub time_ms: u64,
     started: bool,
@@ -93,10 +98,8 @@ pub struct Engine<T: Transport = VirtualTransport> {
     events: Vec<Event>,
     registrations: BTreeMap<u32, crate::registration::Registration>,
     model: Box<dyn RadioModel>,
-    sessions: BTreeMap<u32, crate::session::Session>,
-    session_failures: BTreeMap<u32, SessionFailure>,
+    smf: crate::smf::Smf,
     inflight: BTreeMap<(u32, u16), u64>,
-    next_session_slot: u32,
     next_mobility_tick: u64,
     cell_candidates: BTreeMap<u32, (u32, u64)>,
     coverage: Vec<Sample>,
@@ -120,7 +123,13 @@ impl<T: Transport> Engine<T> {
         scenario.validate()?;
         scenario.version = 2;
         let mut e = Self {
+            legacy: false,
+            control_queue: BTreeMap::new(),
+            control_sequence: 0,
+            control_pending: std::collections::BTreeSet::new(),
+            loss_used: BTreeMap::new(),
             rng: scenario.seed,
+            smf: crate::smf::Smf::new(scenario.session_policies.clone())?,
             scenario,
             time_ms: 0,
             started: false,
@@ -132,10 +141,7 @@ impl<T: Transport> Engine<T> {
             registrations: BTreeMap::new(),
             model,
             coverage: vec![],
-            sessions: BTreeMap::new(),
-            session_failures: BTreeMap::new(),
             inflight: BTreeMap::new(),
-            next_session_slot: 1,
             next_mobility_tick: 100,
             cell_candidates: BTreeMap::new(),
         };
@@ -256,7 +262,14 @@ impl<T: Transport> Engine<T> {
         let ids: Vec<_> = self.ues.keys().copied().collect();
         for id in ids {
             if let Some(cell_id) = self.ues[&id].serving_cell {
-                let bytes = protocol::registration_request(id)?;
+                let bytes = if self.legacy {
+                    protocol::registration_request(id)?
+                } else {
+                    self.registrations
+                        .get_mut(&id)
+                        .unwrap()
+                        .start_ue(self.time_ms)?
+                };
                 let (kind, detail) = protocol::inspect(&bytes)?;
                 self.ues.get_mut(&id).unwrap().state = UeState::RegistrationInitiated;
                 self.log(
@@ -268,6 +281,9 @@ impl<T: Transport> Engine<T> {
                     &bytes,
                     "NAS",
                 );
+                if self.drop_signaling(id, SignalingLoss::RegistrationRequest, &bytes) {
+                    continue;
+                }
                 self.send(Frame {
                     from: Endpoint::Ue(id),
                     to: Endpoint::Gnodeb(cell_id),
@@ -307,15 +323,75 @@ impl<T: Transport> Engine<T> {
             } else {
                 until
             };
-            let deadline_due = self.time_ms < 6000 && boundary >= 6000;
+            if let Some(sent) = self.inflight.values().min() {
+                boundary = boundary.min(sent.saturating_add(2000));
+            }
+            let deadline_due = self.legacy && self.time_ms < 6000 && boundary >= 6000;
             if deadline_due {
                 boundary = 6000;
             }
+            if !self.legacy {
+                if let Some(t) = self.transport.next_time() {
+                    boundary = boundary.min(t);
+                }
+                if let Some(t) = self.control_queue.first_key_value().map(|(k, _)| k.0) {
+                    boundary = boundary.min(t);
+                }
+                if let Some(t) = self.smf.next_deadline() {
+                    boundary = boundary.min(t);
+                }
+                if let Some(t) = self
+                    .registrations
+                    .values()
+                    .filter_map(|r| r.next_deadline())
+                    .min()
+                {
+                    boundary = boundary.min(t);
+                }
+            }
             while let Some((time, frame)) = self.transport.receive(boundary) {
-                self.time_ms = time;
-                self.deliver(frame)?;
+                self.time_ms = time.max(self.time_ms);
+                let id = frame.ue_id;
+                let source = format!("{:?}", frame.from);
+                let destination = format!("{:?}", frame.to);
+                if let Err(reason) = self.deliver(frame) {
+                    // A bad transport PDU must not stop unrelated subscribers or rewind time.
+                    self.log(
+                        id,
+                        source,
+                        destination,
+                        "Dropped malformed frame".into(),
+                        reason,
+                        &[],
+                        "STATE",
+                    );
+                }
             }
             self.time_ms = boundary;
+            if !self.legacy {
+                self.advance_control()?;
+            }
+            let expired: Vec<_> = self
+                .inflight
+                .iter()
+                .filter(|(_, sent)| sent.saturating_add(2000) <= boundary)
+                .map(|(key, _)| *key)
+                .collect();
+            for (id, seq) in expired {
+                self.inflight.remove(&(id, seq));
+                if let Some(s) = self.smf.sessions.get_mut(&id) {
+                    s.dropped += 1;
+                }
+                self.log(
+                    id,
+                    "UPF".into(),
+                    format!("UE-{id}"),
+                    "Echo timeout".into(),
+                    format!("Sequence {seq}; 2000 ms virtual delivery deadline"),
+                    &[],
+                    "STATE",
+                );
+            }
             if self.has_mobility() && self.next_mobility_tick <= boundary {
                 self.update_mobility();
                 self.next_mobility_tick += 100;
@@ -329,6 +405,7 @@ impl<T: Transport> Engine<T> {
                             u.state,
                             UeState::Registered
                                 | UeState::RegistrationRejected
+                                | UeState::RegistrationUnconfirmed
                                 | UeState::NoCoverage
                                 | UeState::ReassociationRequired
                                 | UeState::Deregistered
@@ -359,12 +436,44 @@ impl<T: Transport> Engine<T> {
             bytes,
             ngap,
         } = frame;
+        let ue = self.ues.get(&ue_id).ok_or("Unknown transport UE context")?;
+        // Preserve silent disposal of already invalidated, in-flight cell contexts.
+        if matches!(
+            ue.state,
+            UeState::NoCoverage
+                | UeState::ReassociationRequired
+                | UeState::Deregistered
+                | UeState::RegistrationRetry
+        ) {
+            return Ok(());
+        }
+        if bytes.len() > 65536
+            || !self.gnodebs.contains_key(&cell_id)
+            || ue.serving_cell != Some(cell_id)
+        {
+            return Err("Transport bounds or serving-cell context mismatch".into());
+        }
+        let route_ok = match (&from, &to, ngap) {
+            (Endpoint::Ue(u), Endpoint::Gnodeb(g), false) => *u == ue_id && *g == cell_id,
+            (Endpoint::Gnodeb(g), Endpoint::Amf, true) => *g == cell_id,
+            (Endpoint::Amf, Endpoint::Gnodeb(g), true) => *g == cell_id,
+            (Endpoint::Gnodeb(g), Endpoint::Ue(u), false) => *g == cell_id && *u == ue_id,
+            (Endpoint::Gnodeb(g), Endpoint::Upf, false) => *g == cell_id,
+            (Endpoint::Upf, Endpoint::DataGnodeb(g), false) => *g == cell_id,
+            _ => false,
+        };
+        if !route_ok {
+            return Err("Invalid virtual transport route".into());
+        }
         if matches!(to, Endpoint::Upf | Endpoint::DataGnodeb(_)) {
             return self.deliver_data(from, to, ue_id, cell_id, bytes);
         }
         if matches!(
             self.ues[&ue_id].state,
-            UeState::NoCoverage | UeState::ReassociationRequired | UeState::Deregistered
+            UeState::NoCoverage
+                | UeState::ReassociationRequired
+                | UeState::Deregistered
+                | UeState::RegistrationRetry
         ) {
             return Ok(());
         }
@@ -437,11 +546,23 @@ impl<T: Transport> Engine<T> {
                     .get_mut(&ue_id)
                     .ok_or("Unknown UE context")?;
                 let result = if amf {
-                    registration.at_amf(&bytes)
+                    registration.at_amf_at(&bytes, self.time_ms)
                 } else {
                     registration.at_ue(&bytes)
                 };
                 match result {
+                    Err(reason) if self.ues[&ue_id].state == UeState::Registered => {
+                        // Unsolicited registration PDUs must not tear down an established context.
+                        self.log(
+                            ue_id,
+                            format!("{from:?}"),
+                            format!("{to:?}"),
+                            "Dropped malformed frame".into(),
+                            reason,
+                            &[],
+                            "STATE",
+                        );
+                    }
                     Err(reason) => self.fail_ue(ue_id, reason),
                     Ok(result) => {
                         let (kind, detail) = protocol::inspect(&result.plain)?;
@@ -484,6 +605,18 @@ impl<T: Transport> Engine<T> {
                             }
                         }
                         if let Some(reply) = result.reply {
+                            let loss = match (amf, result.plain[2]) {
+                                (true, 0x41 | 0x59) => SignalingLoss::AuthenticationRequest,
+                                (true, 0x57) => SignalingLoss::SecurityModeCommand,
+                                (true, 0x5e) => SignalingLoss::RegistrationAccept,
+                                (false, 0x56) => SignalingLoss::AuthenticationResponse,
+                                (false, 0x5d) => SignalingLoss::SecurityModeComplete,
+                                (false, 0x42) => SignalingLoss::RegistrationComplete,
+                                _ => SignalingLoss::None,
+                            };
+                            if self.drop_signaling(ue_id, loss, &reply) {
+                                return Ok(());
+                            }
                             self.send(Frame {
                                 from: to,
                                 to: Endpoint::Gnodeb(cell_id),
@@ -505,6 +638,7 @@ impl<T: Transport> Engine<T> {
                             u.state,
                             UeState::Registered
                                 | UeState::RegistrationRejected
+                                | UeState::RegistrationUnconfirmed
                                 | UeState::NoCoverage
                                 | UeState::ReassociationRequired
                                 | UeState::Deregistered
@@ -583,11 +717,12 @@ impl<T: Transport> Engine<T> {
                     .get_mut(&ue.id)
                     .unwrap()
                     .fail(reason.into());
-                if let Some(s) = self.sessions.get_mut(&ue.id) {
+                if let Some(s) = self.smf.sessions.get_mut(&ue.id) {
                     s.active = false;
                     s.dropped += self.inflight.keys().filter(|(id, _)| *id == ue.id).count() as u64;
                 }
                 self.inflight.retain(|(id, _), _| *id != ue.id);
+                self.cancel_control(ue.id);
                 let u = self.ues.get_mut(&ue.id).unwrap();
                 u.serving_cell = candidate;
                 u.state = if candidate.is_none() {
@@ -642,7 +777,7 @@ impl<T: Transport> Engine<T> {
             .ok_or("Unknown UE")?
             .session;
         let plain = crate::session::n1(sm, uplink, initial, request)?;
-        self.exchange_n1(id, plain, uplink, initial)
+        crate::session::unwrap_n1(&self.exchange_n1(id, plain, uplink, initial)?, uplink)
     }
     fn exchange_n1(
         &mut self,
@@ -740,21 +875,17 @@ impl<T: Transport> Engine<T> {
             &sm,
             "5GSM",
         );
-        Ok(sm)
+        Ok(decoded)
     }
     /// One IPv4 session per UE, atomically run at current virtual time.
     pub fn establish_session(&mut self, id: u32) -> Result<(), String> {
+        if !self.legacy {
+            return self.begin_setup(id);
+        }
         if self.ues.get(&id).map(|u| &u.state) != Some(&UeState::Registered) {
             return Err("Register the UE first".into());
         }
-        if self.sessions.get(&id).is_some_and(|s| s.active) {
-            return Err("Session already active".into());
-        }
-        if let Some(f) = self.session_failures.get(&id) {
-            if f.retry_at_ms.is_none_or(|at| self.time_ms < at) {
-                return Err(format!("Session retry blocked: {}", f.reason));
-            }
-        }
+        self.smf.check_establish(id, self.time_ms)?;
         let request = self
             .scenario
             .ues
@@ -763,69 +894,15 @@ impl<T: Transport> Engine<T> {
             .unwrap()
             .session
             .clone();
-        let sm = self.session_nas(id, crate::session::request()?, true, true)?;
-        if sm != crate::session::request()? {
-            return Err("Unsupported SMF request".into());
-        }
-        let policy = self
-            .scenario
-            .session_policies
-            .iter()
-            .find(|p| p.request == request);
-        if policy.is_none() {
-            // TS 24.501 5.4.5.3: return unforwarded SM payload, 5GMM cause 91.
-            let mut dl = crate::session::n1(sm, false, false, &request)?;
-            dl.extend([0x58, 91]);
-            self.exchange_n1(id, crate::session::nas(dl)?, false, false)?;
-            self.session_failures.insert(
-                id,
-                SessionFailure {
-                    domain: "5GMM".into(),
-                    cause: 91,
-                    reason:
-                        "DNN not supported or not subscribed in the slice; reset to change service"
-                            .into(),
-                    retry_at_ms: None,
-                },
-            );
-            return Ok(());
-        }
-        let count = self
-            .sessions
-            .values()
-            .filter(|s| {
-                s.active
-                    && s.dnn == request.dnn
-                    && s.sst == request.snssai.sst
-                    && s.sd == request.snssai.sd
-            })
-            .count();
-        if count >= policy.unwrap().max_sessions as usize || self.next_session_slot > 254 {
-            // 5GSM cause 26; T3396 = 5 x 2 seconds (GPRS timer 3 unit 011).
-            self.session_nas(
-                id,
-                crate::session::nas(vec![0x2e, 1, 1, 0xc3, 26, 0x37, 1, 0x65])?,
-                false,
-                false,
-            )?;
-            self.session_failures.insert(
-                id,
-                SessionFailure {
-                    domain: "5GSM".into(),
-                    cause: 26,
-                    reason: "Insufficient resources; T3396 10 seconds".into(),
-                    retry_at_ms: Some(self.time_ms + 10000),
-                },
-            );
-            return Ok(());
-        }
-        let mut s = crate::session::Session::new(id, self.next_session_slot, &request);
-        let plain = crate::session::n1(
-            crate::session::accept(s.ip, &request)?,
-            false,
-            false,
-            &request,
-        )?;
+        let n1 = crate::session::n1(crate::session::request()?, true, true, &request)?;
+        let decoded = self.exchange_n1(id, n1, true, true)?;
+        let (s, plain) = match self.smf.establish(id, &decoded, self.time_ms)? {
+            crate::smf::Establishment::Reject { n1 } => {
+                self.exchange_n1(id, n1, false, false)?;
+                return Ok(());
+            }
+            crate::smf::Establishment::Setup { session, n1 } => (session, n1),
+        };
         let protected = self
             .registrations
             .get_mut(&id)
@@ -846,7 +923,7 @@ impl<T: Transport> Engine<T> {
             "NGAP",
         );
         let response = crate::session::setup_response(id, s.downlink_teid)?;
-        crate::session::validate_response(&response, id, s.downlink_teid)?;
+        self.smf.setup_response(id, &response)?;
         self.log(
             id,
             "gNodeB".into(),
@@ -886,17 +963,22 @@ impl<T: Transport> Engine<T> {
             &sm,
             "5GSM",
         );
-        self.session_failures.remove(&id);
-        s.active = true;
-        self.sessions.insert(id, s);
-        self.next_session_slot += 1;
         Ok(())
     }
     pub fn deregister(&mut self, id: u32) -> Result<(), String> {
         if self.ues.get(&id).map(|u| &u.state) != Some(&UeState::Registered) {
             return Err("UE is not registered".into());
         }
-        if self.sessions.get(&id).is_some_and(|s| s.active) {
+        if !self.legacy
+            && (self.control_pending.contains(&id)
+                || self.smf.is_pending(id)
+                || self.smf.sessions.get(&id).is_some_and(|s| s.active))
+        {
+            return Err(
+                "Release the PDU session and wait for completion before deregistration".into(),
+            );
+        }
+        if self.smf.sessions.get(&id).is_some_and(|s| s.active) {
             self.release_session(id)?;
         }
         let guti = oxirush_security::nas_5gs::build_guti_bytes(&[0, 0xf1, 0x10], 1, 1, 0, id);
@@ -980,27 +1062,29 @@ impl<T: Transport> Engine<T> {
         }
         self.registrations.get_mut(&id).unwrap().clear();
         self.amf.remove(&id);
-        self.session_failures.remove(&id);
+        self.smf.failures.remove(&id);
         self.ues.get_mut(&id).unwrap().state = UeState::Deregistered;
         Ok(())
     }
     pub fn release_session(&mut self, id: u32) -> Result<(), String> {
-        if !self.sessions.get(&id).is_some_and(|s| s.active) {
+        if !self.legacy {
+            return self.begin_release(id);
+        }
+        if !self.smf.sessions.get(&id).is_some_and(|s| s.active) {
             return Err("No active PDU session".into());
         }
-        self.session_nas(
+        let request = self.session_nas(
             id,
             crate::session::nas(vec![0x2e, 1, 1, 0xd1])?,
             true,
             false,
         )?;
-        self.session_nas(
-            id,
-            crate::session::nas(vec![0x2e, 1, 1, 0xd3, 36])?,
-            false,
-            false,
-        )?;
+        let command = self.smf.release(id, &request, self.time_ms)?;
+        self.session_nas(id, command, false, false)?;
         for (i, b) in crate::session::release_n2(id)?.into_iter().enumerate() {
+            if i == 1 {
+                self.smf.release_response(id, &b)?;
+            }
             self.log(
                 id,
                 if i == 0 {
@@ -1023,15 +1107,15 @@ impl<T: Transport> Engine<T> {
                 "NGAP",
             );
         }
-        self.session_nas(
+        let complete = self.session_nas(
             id,
             crate::session::nas(vec![0x2e, 1, 1, 0xd4])?,
             true,
             false,
         )?;
-        self.sessions.get_mut(&id).unwrap().active = false;
+        self.smf.release_complete(id, &complete)?;
         let pending = self.inflight.keys().filter(|(u, _)| *u == id).count();
-        self.sessions.get_mut(&id).unwrap().dropped += pending as u64;
+        self.smf.sessions.get_mut(&id).unwrap().dropped += pending as u64;
         self.inflight.retain(|(u, _), _| *u != id);
         Ok(())
     }
@@ -1043,6 +1127,7 @@ impl<T: Transport> Engine<T> {
             return Err("128 packets already in flight".into());
         }
         let s = self
+            .smf
             .sessions
             .get_mut(&id)
             .filter(|s| s.active)
@@ -1068,7 +1153,7 @@ impl<T: Transport> Engine<T> {
         self.delay();
         let loss_draw = (self.rng % 100) as u64; // deterministic, explicitly injected packet loss
         if loss_percent > 0 && (loss_percent == 100 || loss_draw < loss_percent as u64) {
-            self.sessions.get_mut(&id).unwrap().dropped += 1;
+            self.smf.sessions.get_mut(&id).unwrap().dropped += 1;
             self.log(
                 id,
                 "gNodeB".into(),
@@ -1099,7 +1184,7 @@ impl<T: Transport> Engine<T> {
         cell: u32,
         wire: Vec<u8>,
     ) -> Result<(), String> {
-        let Some(s) = self.sessions.get(&id).filter(|s| s.active) else {
+        let Some(s) = self.smf.sessions.get(&id).filter(|s| s.active) else {
             return Ok(());
         };
         let uplink = to == Endpoint::Upf;
@@ -1156,12 +1241,10 @@ impl<T: Transport> Engine<T> {
                 ngap: false,
             });
         } else {
-            if packet.len() != 36 || packet[16..20] != ip || packet[20] != 0 {
-                return Err("Invalid downlink echo packet".into());
-            }
+            crate::session::validate_echo_packet(&packet, ip, true)?;
             let seq = u16::from_be_bytes([packet[26], packet[27]]);
             if let Some(sent) = self.inflight.remove(&(id, seq)) {
-                let s = self.sessions.get_mut(&id).unwrap();
+                let s = self.smf.sessions.get_mut(&id).unwrap();
                 s.delivered += 1;
                 s.last_rtt_ms = Some(self.time_ms - sent);
                 self.log(
@@ -1198,14 +1281,18 @@ impl<T: Transport> Engine<T> {
     }
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
+            session_pending: self.control_pending.iter().copied().collect(),
             time_ms: self.time_ms,
             started: self.started,
             pending: self
-                .session_failures
+                .smf
+                .failures
                 .values()
                 .filter(|f| f.retry_at_ms.is_some_and(|at| at > self.time_ms))
                 .count()
+                + self.control_pending.len()
                 + self.transport.pending()
+                + usize::from(self.transport.pending() == 0 && !self.inflight.is_empty())
                 + usize::from(self.has_mobility())
                 + usize::from(
                     self.started
@@ -1214,6 +1301,7 @@ impl<T: Transport> Engine<T> {
                                 u.state,
                                 UeState::Registered
                                     | UeState::RegistrationRejected
+                                    | UeState::RegistrationUnconfirmed
                                     | UeState::NoCoverage
                                     | UeState::ReassociationRequired
                                     | UeState::Deregistered
@@ -1225,8 +1313,8 @@ impl<T: Transport> Engine<T> {
             amf: self.amf.clone(),
             events: self.events.clone(),
             coverage: self.coverage.clone(),
-            sessions: self.sessions.values().cloned().collect(),
-            session_failures: self.session_failures.clone(),
+            sessions: self.smf.sessions.values().cloned().collect(),
+            session_failures: self.smf.failures.clone(),
             event_limit_reached: self.events.len() >= 16384,
         }
     }
@@ -1284,6 +1372,7 @@ mod tests {
     fn concurrent_ues_keep_cell_relaying_until_last_delivery() {
         let mut s = scenario();
         s.ues.push(Ue {
+            signaling: Signaling::default(),
             session: Default::default(),
             mobility: Default::default(),
             fault: LabFault::None,
@@ -1348,7 +1437,18 @@ mod tests {
             good.fault = LabFault::None;
             s.ues.push(good);
             let mut e = Engine::new(s).unwrap();
-            e.advance(7000).unwrap();
+            e.advance(if fault == LabFault::Timeout {
+                15000
+            } else {
+                31000
+            })
+            .unwrap();
+            if fault == LabFault::Timeout {
+                assert_eq!(e.ues[&2].state, UeState::RegistrationRetry);
+                assert_eq!(e.ues[&3].state, UeState::Registered);
+                assert!(e.snapshot().pending > 0);
+                continue;
+            }
             assert_eq!(e.ues[&2].state, UeState::RegistrationRejected, "{fault:?}");
             assert!(e.ues[&2].failure.is_some());
             assert_eq!(e.ues[&3].state, UeState::Registered, "{fault:?}");
@@ -1367,19 +1467,24 @@ mod tests {
         assert!(e.establish_session(2).is_err());
         e.advance(1000).unwrap();
         e.establish_session(2).unwrap();
+        e.advance(100).unwrap();
         assert!(e.establish_session(2).is_err());
-        assert_eq!(e.sessions[&2].ip, [10, 45, 0, 1]);
+        assert_eq!(e.smf.sessions[&2].ip, [10, 45, 0, 1]);
         e.echo(2, 0).unwrap();
         e.advance(1000).unwrap();
-        assert_eq!(e.sessions[&2].delivered, 1);
-        assert!((20..=60).contains(&e.sessions[&2].last_rtt_ms.unwrap()));
+        assert_eq!(e.smf.sessions[&2].delivered, 1);
+        assert!((20..=60).contains(&e.smf.sessions[&2].last_rtt_ms.unwrap()));
         e.echo(2, 100).unwrap();
-        assert_eq!(e.sessions[&2].dropped, 1);
+        assert_eq!(e.smf.sessions[&2].dropped, 1);
         e.release_session(2).unwrap();
-        assert!(!e.sessions[&2].active);
+        e.advance(100).unwrap();
+        assert!(!e.smf.sessions[&2].active);
         assert!(e.echo(2, 0).is_err());
         e.establish_session(2).unwrap();
-        assert_eq!(e.sessions[&2].ip, [10, 45, 0, 2]);
+        e.advance(100).unwrap();
+        assert_eq!(e.smf.sessions[&2].ip, [10, 45, 0, 2]);
+        e.release_session(2).unwrap();
+        e.advance(100).unwrap();
         e.deregister(2).unwrap();
         assert_eq!(e.ues[&2].state, UeState::Deregistered);
         assert!(e.establish_session(2).is_err());
@@ -1435,12 +1540,15 @@ mod tests {
         let mut e = Engine::new(scenario()).unwrap();
         e.advance(1000).unwrap();
         e.establish_session(2).unwrap();
+        e.advance(100).unwrap();
         e.echo(2, 0).unwrap();
         e.release_session(2).unwrap();
+        e.advance(100).unwrap();
         e.establish_session(2).unwrap();
+        e.advance(100).unwrap();
         // Old TEID is invalid after new allocation; stale packets are dropped.
         e.advance(1000).unwrap();
-        assert_eq!(e.sessions[&2].delivered, 0);
+        assert_eq!(e.smf.sessions[&2].delivered, 0);
     }
     #[test]
     fn malformed_building_rejected() {

@@ -1,5 +1,47 @@
 [
   {
+    "ecosystem": "cargo-validation",
+    "name": "arbitrary",
+    "version": "1.5.0",
+    "license": "MIT OR Apache-2.0"
+  },
+  {
+    "ecosystem": "cargo-validation",
+    "name": "cc",
+    "version": "1.7.0",
+    "license": "MIT OR Apache-2.0"
+  },
+  {
+    "ecosystem": "cargo-validation",
+    "name": "find-msvc-tools",
+    "version": "0.1.14",
+    "license": "MIT OR Apache-2.0"
+  },
+  {
+    "ecosystem": "cargo-validation",
+    "name": "jobserver",
+    "version": "0.1.35",
+    "license": "MIT OR Apache-2.0"
+  },
+  {
+    "ecosystem": "cargo-validation",
+    "name": "libfuzzer-sys",
+    "version": "0.4.10",
+    "license": "(MIT OR Apache-2.0) AND NCSA"
+  },
+  {
+    "ecosystem": "cargo-validation",
+    "name": "ranterra-engine-fuzz",
+    "version": "0.0.0",
+    "license": "MIT"
+  },
+  {
+    "ecosystem": "cargo-validation",
+    "name": "shlex",
+    "version": "2.0.1",
+    "license": "MIT OR Apache-2.0"
+  },
+  {
     "ecosystem": "cargo",
     "name": "aes",
     "version": "0.8.4",
@@ -1375,6 +1417,12 @@
   },
   {
     "ecosystem": "npm",
+    "name": "@luma.gl/webgpu",
+    "version": "9.4.2",
+    "license": "MIT"
+  },
+  {
+    "ecosystem": "npm",
     "name": "@mapbox/jsonlint-lines-primitives",
     "version": "2.0.3",
     "license": "MIT"
@@ -1786,6 +1834,12 @@
     "name": "@vitejs/plugin-react",
     "version": "5.2.0",
     "license": "MIT"
+  },
+  {
+    "ecosystem": "npm",
+    "name": "@webgpu/types",
+    "version": "0.1.74",
+    "license": "BSD-3-Clause"
   },
   {
     "ecosystem": "npm",

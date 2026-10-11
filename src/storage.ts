@@ -3,6 +3,14 @@ import type { Scenario, Recording } from "./types";
 let connection: ReturnType<typeof openDB> | undefined;
 const db = () =>
   (connection ??= openDB("ranterra", 2, {
+    blocking() {
+      const old = connection;
+      connection = undefined;
+      void old?.then((db) => db.close()).catch(() => undefined);
+    },
+    terminated() {
+      connection = undefined;
+    },
     upgrade(db) {
       for (const name of ["scenarios", "assets", "runs"])
         if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
@@ -41,12 +49,15 @@ export async function cachePut(key: string, value: unknown) {
 
 export async function saveNamed(s: Scenario) {
   const store = await db();
-  if (
-    !(await store.get("scenarios", `named:${s.name}`)) &&
-    (await store.count("scenarios")) >= 50
-  )
+  const tx = store.transaction("scenarios", "readwrite");
+  const key = `named:${s.name}`;
+  if (!(await tx.store.get(key)) && (await tx.store.count()) >= 50) {
+    tx.abort();
+    await tx.done.catch(() => undefined);
     throw Error("Scenario library limit: 50 entries");
-  await store.put("scenarios", s, `named:${s.name}`);
+  }
+  await tx.store.put(s, key);
+  await tx.done;
 }
 export async function listNamed(): Promise<Scenario[]> {
   return (

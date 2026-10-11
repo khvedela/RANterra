@@ -39,6 +39,12 @@ export interface Recording {
   state_digest: string;
 }
 export interface Ue {
+  signaling?: {
+    delay_ms: number;
+    drop: string;
+    count: number;
+    reject_n2: boolean;
+  };
   session?: SessionRequest;
   fault?: string;
   mobility?: { waypoints: Point[]; speed_mps: number };
@@ -96,6 +102,7 @@ export interface Sample {
   cell_id: number;
 }
 export interface Snapshot {
+  session_pending?: number[];
   time_ms: number;
   started: boolean;
   pending: number;

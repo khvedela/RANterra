@@ -21,7 +21,9 @@
     "benchmark": "cargo run --release -p ranterra-engine --example benchmark",
     "benchmark:wasm": "node scripts/benchmark-wasm.mjs",
     "test:replay": "node scripts/test-replay.mjs",
-    "test:protocols": "sh scripts/validate-protocols.sh"
+    "test:protocols": "sh scripts/validate-protocols.sh",
+    "test:soak": "node scripts/test-soak.mjs",
+    "test:inputs": "node scripts/test-inputs.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.0",

@@ -18,6 +18,8 @@ pub struct Gnodeb {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ue {
+    #[serde(default, skip_serializing_if = "Signaling::is_default")]
+    pub signaling: Signaling,
     #[serde(default)]
     pub session: SessionRequest,
     #[serde(default)]
@@ -114,6 +116,9 @@ impl Scenario {
             }
         }
         for u in &self.ues {
+            if !(1..=1000).contains(&u.signaling.delay_ms) || u.signaling.count > 5 {
+                return Err("Signaling delay must be 1–1000 ms and drop count 0–5".into());
+            }
             u.session.validate()?;
             if u.mobility.waypoints.len() > 128
                 || !u.mobility.waypoints.iter().all(|p| coordinate(*p))
@@ -178,7 +183,47 @@ fn simple_ring(ring: &[[f64; 2]]) -> bool {
     true
 }
 
-/// Reproducible negative experiments, never a credential import facility.
+/// Bounded deterministic laboratory link impairment, independent of RF loss.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Signaling {
+    pub delay_ms: u64,
+    pub drop: SignalingLoss,
+    pub count: u8,
+    pub reject_n2: bool,
+}
+impl Default for Signaling {
+    fn default() -> Self {
+        Self {
+            delay_ms: 20,
+            drop: SignalingLoss::None,
+            count: 0,
+            reject_n2: false,
+        }
+    }
+}
+impl Signaling {
+    fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SignalingLoss {
+    #[default]
+    None,
+    RegistrationRequest,
+    AuthenticationRequest,
+    AuthenticationResponse,
+    SecurityModeCommand,
+    SecurityModeComplete,
+    RegistrationAccept,
+    RegistrationComplete,
+    N2SetupResponse,
+    ReleaseCommand,
+    ReleaseComplete,
+    N2ReleaseResponse,
+}
+/// Reproducible laboratory experiments, never a credential import facility.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LabFault {
     #[default]
@@ -186,6 +231,7 @@ pub enum LabFault {
     UnknownSubscriber,
     InvalidCredentials,
     InvalidAutn,
+    SqnOutOfSync,
     IncorrectResponse,
     InvalidMac,
     InvalidCounter,

@@ -4,7 +4,7 @@ No emulation backend is required. This candidate has been tested from local prod
 
 ## Build prerequisites
 
-Use Node.js 24, npm, Rust 1.97.1 (pinned in `rust-toolchain.toml`), the wasm32-unknown-unknown target and wasm-pack 0.15.0. Python 3 is used only to verify independent test fixtures.
+Use Node.js 24.18.0, npm, Rust 1.97.1 (pinned in `rust-toolchain.toml`), the wasm32-unknown-unknown target and wasm-pack 0.15.0. Python 3 is used only to verify independent test fixtures.
 
 ```sh
 rustup toolchain install 1.97.1 --component rustfmt --component clippy --target wasm32-unknown-unknown
@@ -43,4 +43,4 @@ Set build command `npm run build` and output `dist`. Ensure the build image actu
 
 Hashed `/assets/*` should be immutable for one year; `/index.html` and `/config.json` must revalidate. Serve `.wasm` as `application/wasm`, worker `.js` as JavaScript, and route extensionless application paths to index.html. Missing assets must return errors rather than HTML. Do not cache an HTML error as a worker/WASM asset. HTTPS is required for a public deployment. A COOP/COEP shared-memory setup is not required for the single-threaded WASM engine.
 
-Before a hosted release verify the actual response headers, deep-link refresh, worker/WASM requests, configured map attribution/provider access, registration, session traffic, storage and browser recovery. Local Playwright tests exercise these application/static-server behaviors with external geography disabled; they do not prove the hosting provider configuration. GitHub Actions is supplied but its remote run has not been observed in this work.
+Before a hosted release verify the actual response headers, deep-link refresh, worker/WASM requests, configured map attribution/provider access, registration, session traffic, storage and browser recovery. Local Playwright tests exercise these application/static-server behaviors with external geography disabled; they do not prove the hosting provider configuration. The previous remote GitHub Actions run failed at `npm ci` because its lockfile lacked peer dependencies. This tree fixes that defect and passes clean local installation, but its revised pipeline has not yet run remotely. A green run for the exact release commit and actual HTTPS hosting verification are still required.

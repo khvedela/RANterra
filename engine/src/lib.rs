@@ -1,6 +1,7 @@
 pub mod experiment;
 pub mod research;
 pub mod session;
+pub mod smf;
 
 pub mod auth;
 pub mod model;

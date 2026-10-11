@@ -21,6 +21,7 @@ pub trait Transport {
     fn send(&mut self, at: u64, frame: Frame);
     fn receive(&mut self, until: u64) -> Option<(u64, Frame)>;
     fn pending(&self) -> usize;
+    fn next_time(&self) -> Option<u64>;
 }
 #[derive(Default)]
 pub struct VirtualTransport {
@@ -38,6 +39,9 @@ impl Transport for VirtualTransport {
             return None;
         }
         self.queue.remove(&key).map(|frame| (key.0, frame))
+    }
+    fn next_time(&self) -> Option<u64> {
+        self.queue.first_key_value().map(|(k, _)| k.0)
     }
     fn pending(&self) -> usize {
         self.queue.len()

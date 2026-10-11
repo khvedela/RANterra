@@ -1,0 +1,152 @@
+[
+  {
+    "hex": "000f403d00000400550002006500260018177e004171000d0100f110f0ff000000000010102e02a0200079000f4000f110000001000000f110000001005a400118",
+    "name": "registration-0",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "7e004171000d0100f110f0ff000000000010102e02a020",
+    "name": "registration-0",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "0004403e000003000a000200650055000200650026002b2a7e00560002000021ad0842b1694042e7273c3d4213d10c722010ba6ef274f3828000ca31bb127027654a",
+    "name": "registration-1",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "7e00560002000021ad0842b1694042e7273c3d4213d10c722010ba6ef274f3828000ca31bb127027654a",
+    "name": "registration-1",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "002e403c000004000a0002006500550002006500260016157e00572d102117bd777126c9e8cdcda7ec62d249130079400f4000f110000001000000f110000001",
+    "name": "registration-2",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "7e00572d102117bd777126c9e8cdcda7ec62d24913",
+    "name": "registration-2",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "00044026000003000a0002006500550002006500260013127e03c7eed5c5007e005d220002a020360102",
+    "name": "registration-3",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "7e005d220002a020360102",
+    "name": "registration-3",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "002e404b000004000a0002006500550002006500260025247e043051ea4300af0f6077fd4c35c57d7b5fce91443249197cd447ef2784ad3187ac1ee70079400f4000f110000001000000f110000001",
+    "name": "registration-4",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "7e005e7100177e004171000d0100f110f0ff000000000010102e02a020",
+    "name": "registration-4",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "0004403e000003000a000200650055000200650026002b2a7e02adb583d001e4dd3a03830f61d99035e6626d2b60d695c26fa793fc6bbc7567c6a7c5e45cd12c3fc2",
+    "name": "registration-5",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "7e0042010177000bf200f1100100400000006554070000f11000000115050402010203",
+    "name": "registration-5",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "002e4031000004000a000200650055000200650026000b0a7e02f319290b0196f0fb0079400f4000f110000001000000f110000001",
+    "name": "registration-6",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "7e0043",
+    "name": "registration-6",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "7e00670100082e0101c1ffff91a11201812204020102032511087265736561726368076578616d706c65",
+    "name": "UL-service-selection",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "002e4058000004000a0002006500550002006500260032317e029064419a022f375dda62f8b95c13f1a4e44fe0a3fa2c838286b5cdd8455e1c3f1199275c357802ee9be60c2c8fff840079400f4000f110000001000000f110000001",
+    "name": "UL-service-selection",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "2e0101c211000901000631310101ff01060600010600012905010a2d00012204020102037900060120410101092511087265736561726368076578616d706c65",
+    "name": "PDU-session-accept",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "7e00680100402e0101c211000901000631310101ff01060600010600012905010a2d00012204020102037900060120410101092511087265736561726368076578616d706c651201",
+    "name": "DL-session-accept",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "001d00809a000003000a00020065005500020065004a0080860040014f7e02ece823d0027b57eee097ce8e6ca2ddaa9a5bfc32e522857844bca085c4f38e7ffdcaa9c430ce361fd065257710877d967cef405b9d1bb6ea1f03095c99bc49f07d2d12925b17963def350823bb40400102032d00000400820008080f4240200f4240008b000a01f00a0000010000000200860001000088000700010000091c00",
+    "name": "PDU-resource-setup",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "201d0024000003000a40020065005540020065004b40110000010d0003e00a000001000000030001",
+    "name": "PDU-resource-response",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "2e0101c1ffff91a1",
+    "name": "5GSM",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "2e0101c31a370165",
+    "name": "5GSM",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "2e0101d1",
+    "name": "5GSM",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "2e0101d324",
+    "name": "5GSM",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "2e0101d4",
+    "name": "5GSM",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "7e00680100082e0101c1ffff91a11201585b",
+    "name": "DL-unforwarded-cause91",
+    "protocol": "NAS"
+  },
+  {
+    "hex": "001c0018000003000a00020065005500020065004f00050000010110",
+    "name": "PDU-resource-release",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "201c0018000003000a40020065005540020065004640050000010100",
+    "name": "PDU-resource-release",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "002900100000020072000400650065000f400140",
+    "name": "UE-context-release",
+    "protocol": "NGAP"
+  },
+  {
+    "hex": "2029000f000002000a40020065005540020065",
+    "name": "UE-context-release",
+    "protocol": "NGAP"
+  }
+]

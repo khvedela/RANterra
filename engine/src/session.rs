@@ -42,6 +42,9 @@ impl Session {
     }
 }
 pub fn nas(bytes: Vec<u8>) -> Result<Vec<u8>, String> {
+    if bytes.len() > 65536 {
+        return Err("NAS PDU exceeds limit".into());
+    }
     let m = decode_nas_5gs_message(&bytes).map_err(|e| e.to_string())?;
     if !m.validate().is_empty() {
         return Err(format!("Invalid session NAS: {:?}", m.validate()));
@@ -72,6 +75,9 @@ pub fn n1(
     initial: bool,
     policy: &SessionRequest,
 ) -> Result<Vec<u8>, String> {
+    if sm.len() > 65535 {
+        return Err("N1 payload exceeds length field".into());
+    }
     let mut b = vec![0x7e, 0, if uplink { 0x67 } else { 0x68 }, 1];
     b.extend((sm.len() as u16).to_be_bytes());
     b.extend(sm);
@@ -85,18 +91,30 @@ pub fn n1(
     nas(b)
 }
 pub fn unwrap_n1(bytes: &[u8], uplink: bool) -> Result<Vec<u8>, String> {
+    if bytes.len() > 65536 {
+        return Err("NAS PDU exceeds limit".into());
+    }
     let m = decode_nas_5gs_message(bytes).map_err(|e| e.to_string())?;
     use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
-    let (p, id) = match m {
-        Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(m)) if uplink => {
-            (m.payload_container.value, m.pdu_session_id.map(|i| i.value))
-        }
-        Nas5gsMessage::Gmm(_, Nas5gmmMessage::DlNasTransport(m)) if !uplink => {
-            (m.payload_container.value, m.pdu_session_id.map(|i| i.value))
-        }
+    let (p, id, kind) = match m {
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(m)) if uplink => (
+            m.payload_container.value,
+            m.pdu_session_id.map(|i| i.value),
+            m.payload_container_type.value & 15,
+        ),
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::DlNasTransport(m)) if !uplink => (
+            m.payload_container.value,
+            m.pdu_session_id.map(|i| i.value),
+            m.payload_container_type.value & 15,
+        ),
         _ => return Err("Unexpected N1 SM transport".into()),
     };
-    if id != Some(1) || p.get(1) != Some(&1) || p.get(2) != Some(&1) {
+    if kind != 1
+        || id != Some(1)
+        || p.get(1) != Some(&1)
+        || !(p.get(2) == Some(&1)
+            || (p.get(2) == Some(&0) && matches!(p.get(3), Some(0xd3 | 0xd4))))
+    {
         return Err("PDU session ID / PTI mismatch".into());
     }
     nas(p)
@@ -184,6 +202,9 @@ fn setup_ies(
     Ok((ue, amf, list))
 }
 pub fn decode_setup(bytes: &[u8], ue: u32, teid: u32, slice: &Snssai) -> Result<Vec<u8>, String> {
+    if bytes.len() > 65536 {
+        return Err("NGAP PDU exceeds limit".into());
+    }
     let NGAP_PDU::initiatingMessage(p) = NGAP_PDU::decode(bytes).map_err(|e| e.to_string())? else {
         return Err("Expected N2 setup request".into());
     };
@@ -249,13 +270,164 @@ pub fn setup_response(ue: u32, teid: u32) -> Result<Vec<u8>, String> {
         IGNORE AMF_UE_NGAP_ID(ue as u64),IGNORE RAN_UE_NGAP_ID(ue),IGNORE PDUSessionResourceSetupListSURes(list),
     ).encode().map_err(|e|e.to_string())
 }
+/// Supported failure outcome: NG-RAN cannot allocate radio resources (TS 38.413).
+pub fn setup_failure(ue: u32) -> Result<Vec<u8>, String> {
+    let transfer = PDUSessionResourceSetupUnsuccessfulTransfer::new(
+        Cause::radioNetwork(CauseRadioNetwork::radio_resources_not_available),
+        None,
+        None,
+    );
+    let list = PDUSessionResourceFailedToSetupListSURes(vec![
+        PDUSessionResourceFailedToSetupItemSURes::new(
+            PDUSessionID(1),
+            encode(&transfer)?.into(),
+            None,
+        ),
+    ]);
+    build_ngap!(SuccessfulOutcome,PDUSessionResourceSetup,REJECT,PDUSessionResourceSetupResponse,
+        IGNORE AMF_UE_NGAP_ID(ue as u64),IGNORE RAN_UE_NGAP_ID(ue),IGNORE PDUSessionResourceFailedToSetupListSURes(list),
+    ).encode().map_err(|e|e.to_string())
+}
+pub fn validate_setup_failure(bytes: &[u8], ue: u32) -> Result<(), String> {
+    if bytes.len() > 65536 {
+        return Err("NGAP PDU exceeds limit".into());
+    }
+    let pdu = NGAP_PDU::decode(bytes).map_err(|e| e.to_string())?;
+    if pdu.encode().map_err(|e| e.to_string())? != bytes
+        || pdu != NGAP_PDU::decode(&setup_failure(ue)?).map_err(|e| e.to_string())?
+    {
+        return Err("Unsupported N2 failure or mismatched context".into());
+    }
+    Ok(())
+}
 pub fn validate_response(bytes: &[u8], ue: u32, teid: u32) -> Result<(), String> {
-    let decoded = NGAP_PDU::decode(bytes).map_err(|e| e.to_string())?;
-    let expected = NGAP_PDU::decode(&setup_response(ue, teid)?).map_err(|e| e.to_string())?;
+    if bytes.len() > 65536 {
+        return Err("NGAP PDU exceeds limit".into());
+    }
+    let pdu = NGAP_PDU::decode(bytes).map_err(|e| e.to_string())?;
+    if pdu.encode().map_err(|e| e.to_string())? != bytes {
+        return Err("Noncanonical or trailing N2 bytes".into());
+    }
+    let NGAP_PDU::successfulOutcome(decoded) = pdu else {
+        return Err("Expected N2 setup response".into());
+    };
+    let NGAP_PDU::successfulOutcome(expected) =
+        NGAP_PDU::decode(&setup_response(ue, teid)?).map_err(|e| e.to_string())?
+    else {
+        unreachable!()
+    };
+    if decoded.procedure_code != expected.procedure_code
+        || decoded.criticality != expected.criticality
+    {
+        return Err("N2 response procedure mismatch".into());
+    }
+    let decoded: PDUSessionResourceSetupResponse =
+        decode_open_type(&decoded.value).map_err(|e| e.to_string())?;
+    let expected: PDUSessionResourceSetupResponse =
+        decode_open_type(&expected.value).map_err(|e| e.to_string())?;
+    // TS 38.413 9.4.1 requires object-set ordering and exact mandatory IE multiplicity.
     if decoded != expected {
         return Err("N2 response context mismatch".into());
     }
     Ok(())
+}
+/// The gNodeB allocates its downlink TEID; the SMF must not prescribe it.
+pub fn response_teid(bytes: &[u8], ue: u32) -> Result<u32, String> {
+    if bytes.len() > 65536 {
+        return Err("NGAP PDU exceeds limit".into());
+    }
+    let NGAP_PDU::successfulOutcome(p) = NGAP_PDU::decode(bytes).map_err(|e| e.to_string())? else {
+        return Err("Expected setup response".into());
+    };
+    if p.procedure_code.0 != 29 {
+        return Err("Wrong procedure".into());
+    }
+    let m: PDUSessionResourceSetupResponse =
+        decode_open_type(&p.value).map_err(|e| e.to_string())?;
+    let ie = m
+        .protocol_ies
+        .0
+        .iter()
+        .find(|i| i.id.0 == 75)
+        .ok_or("Missing setup success list")?;
+    let list: PDUSessionResourceSetupListSURes =
+        decode_open_type(&ie.value).map_err(|e| e.to_string())?;
+    if list.0.len() != 1 {
+        return Err("Expected one session".into());
+    }
+    let tr: PDUSessionResourceSetupResponseTransfer =
+        rasn::aper::decode(&list.0[0].p_dusession_resource_setup_response_transfer)
+            .map_err(|e| e.to_string())?;
+    let UPTransportLayerInformation::gTPTunnel(t) = tr
+        .d_lqos_flow_per_tnlinformation
+        .u_ptransport_layer_information
+    else {
+        return Err("Expected GTP tunnel".into());
+    };
+    let teid = u32::from_be_bytes(
+        t.g_tp_teid
+            .0
+            .as_ref()
+            .try_into()
+            .map_err(|_| "Invalid TEID")?,
+    );
+    if teid == 0 {
+        return Err("Zero TEID".into());
+    }
+    validate_response(bytes, ue, teid)?;
+    Ok(teid)
+}
+pub fn validate_release_response(bytes: &[u8], ue: u32) -> Result<(), String> {
+    if bytes.len() > 65536 {
+        return Err("NGAP PDU exceeds limit".into());
+    }
+    let expected = release_n2(ue)?.pop().unwrap();
+    let decoded = NGAP_PDU::decode(bytes).map_err(|e| e.to_string())?;
+    if decoded.encode().map_err(|e| e.to_string())? != expected || bytes != expected {
+        return Err("N2 release response context mismatch".into());
+    }
+    Ok(())
+}
+/// Decode the selected service from the actual N1 transport, not UI configuration.
+pub fn selection(bytes: &[u8]) -> Result<SessionRequest, String> {
+    unwrap_n1(bytes, true)?;
+    use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
+    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(m)) =
+        decode_nas_5gs_message(bytes).map_err(|e| e.to_string())?
+    else {
+        return Err("Expected UL transport".into());
+    };
+    if m.request_type.as_ref().map(|t| t.value & 7) != Some(1) {
+        return Err("Expected initial request type".into());
+    }
+    let d = m.dnn.ok_or("Missing DNN")?.value;
+    let mut rest = d.as_slice();
+    let mut labels = vec![];
+    while !rest.is_empty() {
+        let n = rest[0] as usize;
+        if n == 0 || rest.len() < n + 1 {
+            return Err("Invalid DNN labels".into());
+        }
+        labels.push(std::str::from_utf8(&rest[1..n + 1]).map_err(|_| "Invalid DNN ASCII")?);
+        rest = &rest[n + 1..];
+    }
+    let s = m.s_nssai.ok_or("Missing slice")?.value;
+    if s.len() != 1 && s.len() != 4 {
+        return Err("Unsupported S-NSSAI length".into());
+    }
+    let r = SessionRequest {
+        dnn: labels.join("."),
+        snssai: Snssai {
+            sst: s[0],
+            sd: if s.len() == 4 {
+                Some(s[1..].try_into().unwrap())
+            } else {
+                None
+            },
+        },
+    };
+    r.validate()?;
+    Ok(r)
 }
 /// TS 29.281 G-PDU, no optional fields or extension headers in this profile.
 pub fn gtpu(teid: u32, payload: &[u8]) -> Result<Vec<u8>, String> {
@@ -330,19 +502,30 @@ pub fn echo_packet(ip: [u8; 4], seq: u16) -> Vec<u8> {
     b[22..24].copy_from_slice(&c.to_be_bytes());
     b
 }
-pub fn echo_reply(bytes: &[u8], ip: [u8; 4]) -> Result<Vec<u8>, String> {
+pub fn validate_echo_packet(bytes: &[u8], ip: [u8; 4], reply: bool) -> Result<(), String> {
+    let (source, destination, kind) = if reply {
+        ([10, 45, 255, 1], ip, 0)
+    } else {
+        (ip, [10, 45, 255, 1], 8)
+    };
     if bytes.len() != 36
         || bytes[0] != 0x45
         || bytes[2..4] != [0, 36]
         || bytes[9] != 1
-        || bytes[12..16] != ip
-        || bytes[16..20] != [10, 45, 255, 1]
-        || bytes[20..22] != [8, 0]
+        || bytes[8] == 0
+        || u16::from_be_bytes([bytes[6], bytes[7]]) & 0xbfff != 0
+        || bytes[12..16] != source
+        || bytes[16..20] != destination
+        || bytes[20..22] != [kind, 0]
         || checksum(&bytes[..20]) != 0
         || checksum(&bytes[20..]) != 0
     {
         return Err("Invalid IPv4/ICMP echo route or checksum".into());
     }
+    Ok(())
+}
+pub fn echo_reply(bytes: &[u8], ip: [u8; 4]) -> Result<Vec<u8>, String> {
+    validate_echo_packet(bytes, ip, false)?;
     let mut b = bytes.to_vec();
     b[12..16].copy_from_slice(&[10, 45, 255, 1]);
     b[16..20].copy_from_slice(&ip);
@@ -357,6 +540,9 @@ pub fn echo_reply(bytes: &[u8], ip: [u8; 4]) -> Result<Vec<u8>, String> {
 /// AMF validates the service selected on the actual decoded UL transport.
 pub fn validate_selection(bytes: &[u8], expected: &SessionRequest) -> Result<(), String> {
     use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
+    if bytes.len() > 65536 {
+        return Err("NAS PDU exceeds limit".into());
+    }
     let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(m)) =
         decode_nas_5gs_message(bytes).map_err(|e| e.to_string())?
     else {
@@ -396,6 +582,26 @@ mod tests {
         assert!(decode_setup(&b, 102, 2, &Snssai::default()).is_err());
         let b = setup_response(101, 3).unwrap();
         validate_response(&b, 101, 3).unwrap();
+    }
+    #[test]
+    fn rejects_wrong_n1_payload_kind_and_invalid_echo_headers() {
+        let mut b = n1(request().unwrap(), true, true, &SessionRequest::default()).unwrap();
+        b[3] = 2; // SMS payload type must not be dispatched as 5GSM.
+        assert!(unwrap_n1(&b, true).is_err());
+        let ip = [10, 45, 0, 1];
+        for (offset, value) in [(6, 0x20), (6, 0x80), (7, 1), (8, 0)] {
+            let mut b = echo_packet(ip, 1);
+            b[offset] = value;
+            b[10] = 0;
+            b[11] = 0;
+            let c = checksum(&b[..20]);
+            b[10..12].copy_from_slice(&c.to_be_bytes());
+            assert!(echo_reply(&b, ip).is_err());
+        }
+        let mut reply = echo_reply(&echo_packet(ip, 1), ip).unwrap();
+        validate_echo_packet(&reply, ip, true).unwrap();
+        reply[35] ^= 1;
+        assert!(validate_echo_packet(&reply, ip, true).is_err());
     }
     #[test]
     fn gtpu_wire_and_malformed() {

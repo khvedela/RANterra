@@ -325,7 +325,9 @@ test("policy denial exposes genuine failure and prevents session traffic", async
   ).toBeDisabled();
   await page.getByRole("button", { name: "5GSM", exact: true }).click();
   await expect(
-    page.locator(".event-row").filter({ hasText: "0xc3" }),
+    page
+      .locator(".event-row")
+      .filter({ hasText: "PDU Session Establishment Reject" }),
   ).toBeVisible();
 });
 
@@ -402,4 +404,140 @@ test("IndexedDB v1 migration preserves scenarios and quota failure remains recov
   expect(artifact.scenario.name).toBe("Migrated legacy scenario");
   expect(artifact.started).toBe(false);
   await context.close();
+});
+
+test("AUTS synchronization failure recovers to registered and usable session", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
+    .click();
+  await page.getByLabel("Laboratory fault").selectOption("SqnOutOfSync");
+  await expect(
+    page.getByRole("button", { name: "Run simulation", exact: true }),
+  ).toBeEnabled();
+  await page.getByLabel("Simulation speed").selectOption("10");
+  await page
+    .getByRole("button", { name: "Run simulation", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Exchange complete", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("REGISTERED · NIA2 / NEA2", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(".event-row")
+      .filter({ hasText: "Authentication Failure" })
+      .first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Establish PDU session", exact: true })
+    .click();
+  await expect(page.getByText("10.45.0.1", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Send echo", exact: true }).click();
+  await expect(
+    page.locator(".event-row").filter({ hasText: "Echo delivered" }),
+  ).toBeVisible();
+});
+
+test("timed signaling recovers registration loss and releases failed N2 resources", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
+    .click();
+  await page.getByLabel("Signaling loss").selectOption("SecurityModeComplete");
+  await page.getByLabel("Signaling drop count").fill("1");
+  await page.getByLabel("Simulation speed").selectOption("10");
+  await page
+    .getByRole("button", { name: "Run simulation", exact: true })
+    .click();
+  await expect(
+    page.getByText("REGISTERED · NIA2 / NEA2", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".event-row").filter({ hasText: "T3560 retransmission" }),
+  ).toBeVisible();
+  await page.getByLabel("Reject N2 radio resources").check();
+  await page
+    .getByRole("button", { name: "Run simulation", exact: true })
+    .click();
+  await expect(
+    page.getByText("REGISTERED · NIA2 / NEA2", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Establish PDU session", exact: true })
+    .click();
+  await expect(page.getByText(/NGAP radioNetwork cause 22/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Send echo", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("Session signaling pending · virtual time"),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .locator(".event-row")
+      .filter({ hasText: "PDU Session Release Complete" }),
+  ).toBeVisible();
+});
+
+test("exhausted Registration Complete delivery never reports verified registration", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
+    .click();
+  await page.getByLabel("Signaling loss").selectOption("RegistrationComplete");
+  await page.getByLabel("Signaling drop count").fill("5");
+  await page.getByLabel("Simulation speed").selectOption("10");
+  await page
+    .getByRole("button", { name: "Run simulation", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      /T3550 exhausted: AMF registered, UE completion unconfirmed/,
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText("REGISTERED · NIA2 / NEA2", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Establish PDU session", exact: true }),
+  ).toBeDisabled();
+});
+
+test("untrusted labels remain text and blocked storage leaves computation usable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    indexedDB.open = () => {
+      throw new DOMException("Storage disabled for test", "SecurityError");
+    };
+  });
+  await page.reload();
+  const s = structuredClone(minimal);
+  s.name = '<img src=x onerror="globalThis.injected=true">';
+  s.ues[0].name = '<svg onload="globalThis.injected=true">';
+  await page.locator("input[type=file]").setInputFiles({
+    name: "untrusted.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(s)),
+  });
+  await expect(page.getByLabel("Scenario name")).toHaveValue(s.name);
+  await expect(
+    page.getByRole("button", { name: `Select ${s.ues[0].name}`, exact: true }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => Object.hasOwn(globalThis, "injected"))).toBe(
+    false,
+  );
+  await page.getByLabel("Simulation speed").selectOption("10");
+  await page
+    .getByRole("button", { name: "Run simulation", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Exchange complete", exact: true }),
+  ).toBeVisible();
 });

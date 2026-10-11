@@ -42,6 +42,9 @@ pub fn registration_reject() -> std::result::Result<Vec<u8>, String> {
 }
 
 pub fn inspect(bytes: &[u8]) -> std::result::Result<(String, String), String> {
+    if bytes.len() > 65536 {
+        return Err("NAS PDU exceeds limit".into());
+    }
     let message = decode_nas_5gs_message(bytes).map_err(|e| e.to_string())?;
     let kind = match &message {
         Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(_)) => "Registration Request",

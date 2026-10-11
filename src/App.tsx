@@ -117,6 +117,9 @@ export default function App() {
     { request: defaultRequest, max_sessions: 128 },
   ];
   const ueRequest = ue?.session ?? defaultRequest;
+  const signaling = (candidate.current ?? scenario).ues.find(
+    (u) => u.id === selected,
+  )?.signaling;
   const sessionFailure = selected
     ? snapshot?.session_failures?.[selected]
     : undefined;
@@ -191,6 +194,8 @@ export default function App() {
         revision: activeRevision.current,
       } satisfies WorkerCommand);
   }
+  const sessionPending =
+    snapshot?.session_pending?.includes(selected ?? 0) ?? false;
   const ueStatus = snapshot?.ues.find((u) => u.id === selected);
   function command(type: "play" | "pause" | "step") {
     worker.current?.postMessage({
@@ -395,6 +400,30 @@ export default function App() {
     });
     setSelected(null);
   }
+  function changeSignaling(
+    patch: Partial<NonNullable<Scenario["ues"][number]["signaling"]>>,
+  ) {
+    if (!ue) return;
+    const base = candidate.current ?? scenario;
+    apply({
+      ...base,
+      ues: base.ues.map((u) =>
+        u.id === ue.id
+          ? {
+              ...u,
+              signaling: {
+                delay_ms: 20,
+                drop: "None",
+                count: 0,
+                reject_n2: false,
+                ...u.signaling,
+                ...patch,
+              },
+            }
+          : u,
+      ),
+    });
+  }
   function updateRadio(key: keyof Gnodeb, value: number) {
     if (!gnodeb) return;
     apply({
@@ -458,6 +487,8 @@ export default function App() {
   async function importFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
+    setPending(true);
+    let applied = false;
     try {
       if (f.size > 4_000_000)
         throw Error("Import must be smaller than 4 MB (scenarios: 2 MB).");
@@ -472,11 +503,15 @@ export default function App() {
           recording: data as Recording,
           revision: activeRevision.current,
         } satisfies WorkerCommand);
-      } else apply(data as Scenario | Recording);
+      } else {
+        apply(data as Scenario | Recording);
+        applied = true;
+      }
       setSelected(null);
     } catch (e) {
       setNotice(`Import failed: ${e}`);
     } finally {
+      if (!applied) setPending(false);
       e.target.value = "";
       importPurpose.current = "restore";
     }
@@ -1261,6 +1296,7 @@ export default function App() {
                       disabled={
                         ueStatus?.state !== "Registered" ||
                         !!session?.active ||
+                        sessionPending ||
                         !!(
                           sessionFailure &&
                           (sessionFailure.retry_at_ms === null ||
@@ -1268,10 +1304,18 @@ export default function App() {
                               sessionFailure.retry_at_ms)
                         )
                       }
-                      onClick={() => sessionAction("establish")}
+                      onClick={() => {
+                        sessionAction("establish");
+                        command("play");
+                      }}
                     >
                       Establish PDU session
                     </button>
+                    {sessionPending && (
+                      <p role="status">
+                        Session signaling pending · virtual time
+                      </p>
+                    )}
                     {sessionFailure && (
                       <p role="status">
                         {sessionFailure.domain} cause {sessionFailure.cause}:{" "}
@@ -1297,7 +1341,7 @@ export default function App() {
                       />
                     </label>
                     <button
-                      disabled={!session?.active}
+                      disabled={!session?.active || sessionPending}
                       onClick={() => {
                         sessionAction("echo");
                         command("play");
@@ -1306,13 +1350,20 @@ export default function App() {
                       Send echo
                     </button>
                     <button
-                      disabled={!session?.active}
-                      onClick={() => sessionAction("release")}
+                      disabled={!session?.active || sessionPending}
+                      onClick={() => {
+                        sessionAction("release");
+                        command("play");
+                      }}
                     >
                       Release session
                     </button>
                     <button
-                      disabled={ueStatus?.state !== "Registered"}
+                      disabled={
+                        ueStatus?.state !== "Registered" ||
+                        sessionPending ||
+                        !!session?.active
+                      }
                       onClick={() => sessionAction("deregister")}
                     >
                       Deregister UE
@@ -1326,6 +1377,80 @@ export default function App() {
                         ? "Finish trajectory"
                         : "Draw trajectory"}
                     </button>
+                    <fieldset className="session-fields">
+                      <legend>Signaling laboratory (edits reset run)</legend>
+                      <label>
+                        Session hop delay (virtual ms)
+                        <input
+                          aria-label="Signaling delay"
+                          type="number"
+                          min={1}
+                          max={1000}
+                          value={signaling?.delay_ms ?? 20}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            if (value >= 1 && value <= 1000)
+                              changeSignaling({ delay_ms: value });
+                          }}
+                        />
+                      </label>
+                      <label>
+                        Drop message
+                        <select
+                          aria-label="Signaling loss"
+                          value={signaling?.drop ?? "None"}
+                          onChange={(e) =>
+                            changeSignaling({ drop: e.target.value })
+                          }
+                        >
+                          {[
+                            "None",
+                            "RegistrationRequest",
+                            "AuthenticationRequest",
+                            "AuthenticationResponse",
+                            "SecurityModeCommand",
+                            "SecurityModeComplete",
+                            "RegistrationAccept",
+                            "RegistrationComplete",
+                            "N2SetupResponse",
+                            "ReleaseCommand",
+                            "ReleaseComplete",
+                            "N2ReleaseResponse",
+                          ].map((v) => (
+                            <option key={v}>{v}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Initial messages dropped
+                        <input
+                          aria-label="Signaling drop count"
+                          type="number"
+                          min={0}
+                          max={5}
+                          value={signaling?.count ?? 0}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            if (
+                              Number.isInteger(value) &&
+                              value >= 0 &&
+                              value <= 5
+                            )
+                              changeSignaling({ count: value });
+                          }}
+                        />
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={signaling?.reject_n2 ?? false}
+                          onChange={(e) =>
+                            changeSignaling({ reject_n2: e.target.checked })
+                          }
+                        />
+                        Reject N2 radio resources
+                      </label>
+                    </fieldset>
                     <fieldset className="session-fields">
                       <legend>Requested data service (edits reset run)</legend>
                       <label>
@@ -1495,6 +1620,7 @@ export default function App() {
                           "UnknownSubscriber",
                           "InvalidCredentials",
                           "InvalidAutn",
+                          "SqnOutOfSync",
                           "IncorrectResponse",
                           "InvalidMac",
                           "InvalidCounter",
@@ -1505,9 +1631,11 @@ export default function App() {
                       </select>
                     </label>
                     <p className="hint">
-                      Cell selection uses strongest estimated RSRP above −120
-                      dBm by default. Mobility uses 100 ms ticks and A3-style
-                      reassociation. Protocol handover is unsupported.
+                      SqnOutOfSync starts the synthetic USIM at SQN 100 and
+                      exercises authenticated resynchronization. Cell selection
+                      uses strongest estimated RSRP above −120 dBm by default.
+                      Mobility uses 100 ms ticks and A3-style reassociation.
+                      Protocol handover is unsupported.
                     </p>
                   </>
                 )}
@@ -1887,8 +2015,9 @@ export default function App() {
             </table>
             <p>
               Protocol handovers: unsupported. SINR uses full-load co-channel
-              interference; RSRP is a power-allocation proxy. Session control is
-              atomic at current virtual time.
+              interference; RSRP is a power-allocation proxy. New runs use
+              configured virtual session delays; legacy recordings preserve
+              atomic session control. Deregistration remains atomic.
             </p>
             {baseline && (
               <p>

@@ -52,6 +52,7 @@ assert(
 assert.equal(result.coverage.length, 1225);
 assert.throws(() => new BrowserEngine('{"version":99}'));
 a.session(101, "establish", 0);
+a.advance(100);
 a.session(101, "echo", 0);
 const checkpoint = a.recording();
 const restored = new BrowserEngine(checkpoint);
@@ -69,6 +70,7 @@ tampered.state_digest = "0".repeat(64);
 assert.throws(() => new BrowserEngine(JSON.stringify(tampered)));
 restored.free();
 a.session(101, "release", 0);
+a.advance(100);
 assert.equal(JSON.parse(a.snapshot()).sessions[0].active, false);
 a.session(101, "deregister", 0);
 assert.equal(JSON.parse(a.snapshot()).ues[0].state, "Deregistered");
@@ -76,4 +78,24 @@ a.free();
 b.free();
 console.log(
   "WASM runtime verified: NAS + NGAP binary round trip, authenticated registration, coverage, deterministic execution, invalid-input rejection.",
+);
+const resyncScenario = structuredClone(scenario);
+resyncScenario.ues[0].fault = "SqnOutOfSync";
+const resync = new BrowserEngine(JSON.stringify(resyncScenario));
+resync.advance(1000);
+const resyncResult = JSON.parse(resync.snapshot());
+assert.equal(resyncResult.ues[0].state, "Registered");
+assert(
+  resyncResult.events.some(
+    (e) =>
+      e.kind === "Authentication Failure" &&
+      e.hex.startsWith("7e 00 59 15 30 0e"),
+  ),
+);
+const resyncReplay = new BrowserEngine(resync.recording());
+assert.deepEqual(JSON.parse(resyncReplay.snapshot()), resyncResult);
+resyncReplay.free();
+resync.free();
+console.log(
+  "Actual WASM AUTS resynchronization and deterministic checkpoint replay passed.",
 );

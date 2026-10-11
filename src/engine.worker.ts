@@ -41,6 +41,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
     !Number.isSafeInteger(command.revision)
   )
     return;
+  if (command.revision < revision) return;
   if (queued >= 256) {
     fail("Worker command queue limit reached", command.revision);
     return;
@@ -99,6 +100,7 @@ self.onmessage = (event: MessageEvent<WorkerCommand>) => {
         if (
           !Number.isSafeInteger(command.id) ||
           command.id <= 0 ||
+          command.id > 0xffffffff ||
           !Number.isInteger(command.loss) ||
           command.loss < 0 ||
           command.loss > 100

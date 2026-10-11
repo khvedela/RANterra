@@ -4,7 +4,7 @@ import os
 import pathlib
 import subprocess
 root = pathlib.Path(__file__).resolve().parent.parent
-result = subprocess.run(['go','run','golang.org/x/vuln/cmd/govulncheck@v1.9.0','-json','./...'],
+result = subprocess.run(['go','run','golang.org/x/vuln/cmd/govulncheck@v1.9.0','-json','-test','./...'],
     cwd=root/'validation/free5gc', env={**os.environ,'GOTOOLCHAIN':'go1.27.2'}, text=True, capture_output=True)
 output = root/'test-results/validation-go-audit.json'
 output.parent.mkdir(exist_ok=True)

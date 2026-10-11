@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 // Select MIT/Apache alternatives, including for r-efi's optional LGPL alternative.
 const approved = new Set([
   "(MIT OR Apache-2.0)",
+  "(MIT OR Apache-2.0) AND NCSA",
   "BlueOak-1.0.0",
   "MIT",
   "ISC",
@@ -33,8 +34,32 @@ const cargo = JSON.parse(
     maxBuffer: 10000000,
   }),
 );
+const fuzz = JSON.parse(
+  execFileSync(
+    "cargo",
+    [
+      "metadata",
+      "--manifest-path",
+      "validation/fuzz/Cargo.toml",
+      "--locked",
+      "--format-version",
+      "1",
+    ],
+    { encoding: "utf8", maxBuffer: 10000000 },
+  ),
+);
+const base = new Set(cargo.packages.map((p) => `${p.name}@${p.version}`));
+const additions = fuzz.packages.filter(
+  (p) => !base.has(`${p.name}@${p.version}`),
+);
 const lock = JSON.parse(await readFile("package-lock.json", "utf8"));
 const dependencies = [
+  ...additions.map((p) => ({
+    ecosystem: "cargo-validation",
+    name: p.name,
+    version: p.version,
+    license: p.license,
+  })),
   ...cargo.packages.map((p) => ({
     ecosystem: "cargo",
     name: p.name,

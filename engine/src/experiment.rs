@@ -5,7 +5,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-pub const PROFILE: &str = "ranterra-lab/2";
+pub const PROFILE: &str = "ranterra-lab/3";
 pub const MAX_COMMANDS: usize = 4096;
 pub const MAX_TIME_MS: u64 = 3_600_000;
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -37,12 +37,14 @@ pub struct Recording {
 /// The application and portable native runner use this boundary for all mutations.
 pub struct Experiment {
     engine: Engine,
+    profile: String,
     commands: Vec<Command>,
 }
 impl Experiment {
     pub fn new(scenario: Scenario) -> Result<Self, String> {
         Ok(Self {
             engine: Engine::new(scenario)?,
+            profile: PROFILE.into(),
             commands: vec![],
         })
     }
@@ -92,7 +94,7 @@ impl Experiment {
         Ok(Recording {
             format: "ranterra-experiment".into(),
             version: 1,
-            engine_profile: PROFILE.into(),
+            engine_profile: self.profile.clone(),
             scenario: self.engine.scenario.clone(),
             commands: self.commands.clone(),
             time_ms: self.engine.time_ms,
@@ -129,12 +131,22 @@ impl Experiment {
             s.session_failures,
         ))
         .map_err(|e| e.to_string())?;
-        Ok(format!("{:x}", Sha256::digest(bytes)))
+        let mut hash = Sha256::new();
+        hash.update(bytes);
+        if !self.engine.legacy {
+            // Profile 3 authenticates compatibility of the complete input history,
+            // including future delayed actions; this is still not a digital signature.
+            hash.update(
+                serde_json::to_vec(&(&self.profile, &self.engine.scenario, &self.commands))
+                    .map_err(|e| e.to_string())?,
+            );
+        }
+        Ok(format!("{:x}", hash.finalize()))
     }
     pub fn replay(recording: Recording) -> Result<Self, String> {
         if recording.format != "ranterra-experiment"
             || recording.version != 1
-            || recording.engine_profile != PROFILE
+            || ![PROFILE, "ranterra-lab/2"].contains(&recording.engine_profile.as_str())
         {
             return Err("Unsupported experiment format/version/engine profile".into());
         }
@@ -159,6 +171,18 @@ impl Experiment {
             previous = c.time_ms;
         }
         let mut out = Self::new(recording.scenario)?;
+        out.engine.legacy = recording.engine_profile == "ranterra-lab/2";
+        if out.engine.legacy
+            && out
+                .engine
+                .scenario
+                .ues
+                .iter()
+                .any(|u| u.signaling != Default::default())
+        {
+            return Err("Profile 2 does not support signaling configuration".into());
+        }
+        out.profile = recording.engine_profile;
         for c in recording.commands {
             out.advance_to(c.time_ms)?;
             // Replay only into the candidate. No recursive transactional execute/rollback.

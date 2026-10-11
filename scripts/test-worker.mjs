@@ -96,6 +96,7 @@ if (!isMainThread) {
     const events = finished.snapshot.events;
     const id = scenario.ues[0].id;
     post({ type: "session", id, action: "establish", loss: 0, revision: 1 });
+    post({ type: "play", revision: 1 });
     await wait((m) => m.revision === 1 && m.snapshot?.sessions[0]?.active);
     post({ type: "session", id, action: "echo", loss: 0, revision: 1 });
     post({ type: "play", revision: 1 });
@@ -103,6 +104,7 @@ if (!isMainThread) {
       (m) => m.revision === 1 && m.snapshot?.sessions[0]?.delivered === 1,
     );
     post({ type: "session", id, action: "release", loss: 0, revision: 1 });
+    post({ type: "play", revision: 1 });
     await wait(
       (m) =>
         m.revision === 1 &&
@@ -144,6 +146,35 @@ if (!isMainThread) {
       (m) => m.type === "recording" && m.revision === 4,
     );
     assert.deepEqual(unchanged.recording, exported.recording);
+    // A safe JS integer can still wrap through wasm-bindgen's u32 coercion.
+    post({
+      type: "session",
+      id: 0x100000000 + id,
+      action: "establish",
+      loss: 0,
+      revision: 4,
+    });
+    const wrapped = await wait((m) => m.type === "error" && m.revision === 4);
+    assert.match(wrapped.message, /Invalid session command/);
+    post({ type: "step", revision: 4 });
+    const afterBadId = await wait(
+      (m) =>
+        m.revision === 4 &&
+        m.snapshot?.time_ms === restored.snapshot.time_ms + 10,
+    );
+    assert.equal(afterBadId.snapshot.sessions.length, 0);
+    for (let i = 0; i < 300; i++) post({ type: "play", revision: 1 });
+    post({ type: "step", revision: 4 });
+    await wait(
+      (m) =>
+        m.revision === 4 &&
+        m.snapshot?.time_ms === restored.snapshot.time_ms + 20,
+    );
+    assert(
+      !messages.some(
+        (m) => m.type === "error" && m.message.includes("queue limit"),
+      ),
+    );
     if (process.argv.includes("--benchmark")) {
       const bounded = JSON.parse(await readFile("examples/paris.json", "utf8"));
       bounded.radio = { model: "UMa" };

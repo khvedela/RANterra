@@ -46,5 +46,77 @@
       "reload_roundtrip_max_ms": 70.682667,
       "sampled_process_rss_bytes": 289144832
     }
+  },
+  "endpoint_reliability_followup_wasm_node": {
+    "cells": 16,
+    "ues": 128,
+    "buildings": 467,
+    "samples": 1225,
+    "runs": 10,
+    "rf_median_ms": 46.738459000000034,
+    "rf_max_ms": 81.708042,
+    "registration_median_ms": 19.635999999999967,
+    "wasm_linear_memory_bytes": 6356992,
+    "node_rss_bytes": 515833856,
+    "snapshot_json_bytes": 1038013
+  },
+  "smf_auts_followup_wasm_node": {
+    "cells": 16,
+    "ues": 128,
+    "buildings": 467,
+    "samples": 1225,
+    "runs": 10,
+    "rf_median_ms": 51.24812500000007,
+    "rf_max_ms": 82.586459,
+    "registration_median_ms": 21.95129200000008,
+    "wasm_linear_memory_bytes": 6356992,
+    "node_rss_bytes": 511066112,
+    "snapshot_json_bytes": 1038013
+  },
+  "smf_auts_followup_worker_node": {
+    "worker_load_roundtrip_median_ms": 53.1658750000006,
+    "worker_load_roundtrip_max_ms": 58.67216600000029,
+    "runs": 10,
+    "cells": 16,
+    "ues": 128,
+    "buildings": 467,
+    "node_process_rss_bytes": 394493952
+  },
+  "latest_signaling_validation": {
+    "native": {
+      "buildings": 467,
+      "cells": 16,
+      "registration_median_ms": 13.308167,
+      "rf_constructor_max_ms": 25.141582999999997,
+      "rf_constructor_median_ms": 22.445458000000002,
+      "runs": 10,
+      "samples": 1225,
+      "snapshot_json_bytes": 1038551,
+      "ues": 128,
+      "peak_rss_bytes": 10174464,
+      "rust": "1.97.1"
+    },
+    "wasm_node": {
+      "cells": 16,
+      "ues": 128,
+      "buildings": 467,
+      "samples": 1225,
+      "runs": 10,
+      "rf_median_ms": 46.03370800000005,
+      "rf_max_ms": 77.293375,
+      "registration_median_ms": 19.319875000000025,
+      "wasm_linear_memory_bytes": 6488064,
+      "node_rss_bytes": 510263296,
+      "snapshot_json_bytes": 1038013
+    },
+    "worker_node": {
+      "worker_load_roundtrip_median_ms": 49.06600000000071,
+      "worker_load_roundtrip_max_ms": 53.90325000000121,
+      "runs": 10,
+      "cells": 16,
+      "ues": 128,
+      "buildings": 467,
+      "node_process_rss_bytes": 569049088
+    }
   }
 }

@@ -15,6 +15,7 @@ fn checkpoint_restores_inflight_packets_counts_and_continuation() {
     let id = e.configuration().ues[0].id;
     e.advance(1000).unwrap();
     e.execute(Action::Establish { ue_id: id }).unwrap();
+    e.advance(100).unwrap();
     e.execute(Action::Echo {
         ue_id: id,
         loss_percent: 0,
@@ -34,12 +35,16 @@ fn checkpoint_restores_inflight_packets_counts_and_continuation() {
         })
         .unwrap();
         run.execute(Action::Release { ue_id: id }).unwrap();
+        run.advance(100).unwrap();
         run.execute(Action::Establish { ue_id: id }).unwrap();
+        run.advance(100).unwrap();
         run.execute(Action::Echo {
             ue_id: id,
             loss_percent: 0,
         })
         .unwrap();
+        run.advance(100).unwrap();
+        run.execute(Action::Release { ue_id: id }).unwrap();
         run.advance(100).unwrap();
         run.execute(Action::Deregister { ue_id: id }).unwrap();
     }
@@ -64,6 +69,7 @@ fn migration_bounds_order_digest_and_failed_command_are_transactional() {
     assert_eq!(json(&e), before);
     e.advance(1000).unwrap();
     e.execute(Action::Establish { ue_id: 101 }).unwrap();
+    e.advance(100).unwrap();
     e.advance(20).unwrap();
     e.execute(Action::Echo {
         ue_id: 101,
@@ -112,9 +118,11 @@ fn policy_selection_capacity_reject_backoff_and_retry() {
     let mut e = Experiment::new(s).unwrap();
     e.advance(1000).unwrap();
     e.execute(Action::Establish { ue_id: 101 }).unwrap();
+    e.advance(100).unwrap();
     assert_eq!(e.snapshot().sessions[0].dnn, "research.example");
     assert_eq!(e.snapshot().sessions[0].sd, Some([1, 2, 3]));
     e.execute(Action::Establish { ue_id: 102 }).unwrap();
+    e.advance(100).unwrap();
     assert_eq!(e.snapshot().session_failures[&102].cause, 26);
     assert!(e
         .snapshot()
@@ -123,8 +131,10 @@ fn policy_selection_capacity_reject_backoff_and_retry() {
         .any(|e| e.hex == "2e 01 01 c3 1a 37 01 65"));
     assert!(e.execute(Action::Establish { ue_id: 102 }).is_err());
     e.execute(Action::Release { ue_id: 101 }).unwrap();
+    e.advance(100).unwrap();
     e.advance(10000).unwrap();
     e.execute(Action::Establish { ue_id: 102 }).unwrap();
+    e.advance(100).unwrap();
     assert_eq!(e.snapshot().sessions[1].ip, [10, 45, 0, 2]);
     assert!(e.snapshot().session_failures.is_empty());
     assert_eq!(
@@ -139,6 +149,7 @@ fn unsupported_service_returns_protected_unforwarded_n1_without_allocation() {
     let mut e = Experiment::new(s).unwrap();
     e.advance(1000).unwrap();
     e.execute(Action::Establish { ue_id: 101 }).unwrap();
+    e.advance(100).unwrap();
     let snap = e.snapshot();
     assert!(snap.sessions.is_empty());
     assert_eq!(snap.session_failures[&101].cause, 91);
@@ -160,17 +171,17 @@ fn timeout_with_mobility_is_independent_of_step_boundaries() {
     s.ues[0].mobility.waypoints = vec![[s.ues[0].lon + 0.001, s.ues[0].lat]];
     let mut a = Experiment::new(s.clone()).unwrap();
     let mut b = Experiment::new(s).unwrap();
-    a.advance(10000).unwrap();
-    for _ in 0..1000 {
+    a.advance(15000).unwrap();
+    for _ in 0..1500 {
         b.advance(10).unwrap();
     }
     assert_eq!(json(&a), json(&b));
-    assert_eq!(a.snapshot().ues[0].state, UeState::RegistrationRejected);
+    assert_eq!(a.snapshot().ues[0].state, UeState::RegistrationRetry);
     assert!(a
         .snapshot()
         .events
         .iter()
-        .any(|e| e.time_ms == 6000 && e.detail.contains("timeout")));
+        .any(|e| e.time_ms == 15000 && e.kind == "T3510 expired"));
 }
 #[test]
 fn policy_schema_rejects_duplicates_bad_dns_and_reserved_sd() {
@@ -229,4 +240,43 @@ fn checked_in_experiment_is_replayable() {
     assert!(session.active);
     assert_eq!(session.delivered, 1);
     assert_eq!(session.dropped, 1);
+}
+
+#[test]
+fn auts_resynchronization_is_traced_and_replayed_through_each_checkpoint() {
+    let mut s = scenario();
+    s.ues[0].fault = ranterra_engine::model::LabFault::SqnOutOfSync;
+    let id = s.ues[0].id;
+    let mut e = Experiment::new(s).unwrap();
+    for _ in 0..50 {
+        e.advance(10).unwrap();
+        let r = Experiment::replay(e.recording().unwrap()).unwrap();
+        assert_eq!(json(&e), json(&r));
+    }
+    let snapshot = e.snapshot();
+    assert_eq!(snapshot.ues[0].state, UeState::Registered);
+    assert!(snapshot
+        .events
+        .iter()
+        .any(|v| v.kind == "Authentication Failure" && v.hex.starts_with("7e 00 59 15 30 0e")));
+    let requests: Vec<_> = snapshot
+        .events
+        .iter()
+        .filter(|v| v.kind == "Authentication Request" && v.layer == "NAS")
+        .collect();
+    let unique: std::collections::BTreeSet<_> = requests.iter().map(|e| &e.hex).collect();
+    assert_eq!(unique.len(), 2);
+    e.execute(Action::Establish { ue_id: id }).unwrap();
+    e.advance(100).unwrap();
+    e.execute(Action::Echo {
+        ue_id: id,
+        loss_percent: 0,
+    })
+    .unwrap();
+    e.advance(100).unwrap();
+    assert_eq!(e.snapshot().sessions[0].delivered, 1);
+    assert_eq!(
+        json(&e),
+        json(&Experiment::replay(e.recording().unwrap()).unwrap())
+    );
 }

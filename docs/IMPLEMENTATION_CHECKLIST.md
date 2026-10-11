@@ -1,12 +1,20 @@
 # Implementation checklist
 
-Baseline 2026-10-11: clean checkout; 14 native tests, actual WASM runtime and production worker tests passed before edits. Audited Rust core, browser adapters, React/map UI, storage, geography, scripts, manifests, examples and existing documentation. No repository AGENTS.md found.
+Baseline: the original 14 native tests, actual WASM and worker tests passed before the initial upgrade. The current follow-up also ran the existing suite before changes. No repository AGENTS.md was present.
 
-- [x] A: audit, architecture review and baseline.
-- [x] B: real lab AKA, independent NIA2/NEA2 contexts, encoded registration/deregistration and negative tests.
-- [x] C: bounded encoded PDU resource lifecycle and virtual GTP-U/IP echo.
-- [x] D: TR path-loss subset, waypoint mobility/reassociation, equation checks and native/WASM benchmarks.
-- [x] E: session/entity inspector, protocol filters, experiment controls, dashboard/exports and local copies.
-- [x] F: input/provider/security hardening, browser automation, CI, static deployment configuration and release report.
+- [x] Preserve React/MapLibre/deck.gl, shared native Rust, Worker and WASM boundaries.
+- [x] Synthetic AKA/NAS security, independent protocol peers and AUTS recovery.
+- [x] Shared SMF policies, reservations, N2-gated user plane and cleanup.
+- [x] Normal registration retransmission/retry timers and unconfirmed-state handling.
+- [x] Encoded N2 failed-resource response and network-initiated release.
+- [x] Browser timed session signaling, deterministic loss injection and pending controls.
+- [x] Profile-3 checkpoint/continuation; profile-2 compatibility retained.
+- [x] RF numerical validation and bounded native/WASM/worker benchmarks.
+- [x] Local clean build, 66 Rust tests, 13 independent peers, 30 codec frames, 22 browser tests.
+- [x] Sanitizer fuzzing, extended WASM soak, input/storage hardening and internal ASVS Level 1 review.
+- [x] Repair clean-install peer dependencies, pin CI actions, audit dependencies/licenses and verify reproducible artifacts.
+- [ ] Green remote CI for the exact candidate commit; previous remote run failed before the lockfile fix.
+- [ ] Authorized HTTPS deployment and actual host/provider verification.
+- [ ] Remote candidate validation after authorized commit/push; stable 1.0.0 metadata/tag/publication remain gated.
 
-These checkmarks record implementation passes, not satisfaction of every requirement in each phase. [The release report](V1_RELEASE_REPORT.md) lists reduced scope and unmet gates: full external state-machine interoperability, field RF calibration, extended reliability verification and hosted deployment. The follow-up implements configurable session policies, portable replay/migrations, independent codec validation and external RF numerical reference checks. Candidate metadata deliberately remains 1.0.0-rc.1. No publication or external deployment performed.
+Checkmarks apply to the explicitly bounded research profile, not every conditional 3GPP requirement. Complete-core/SBI/PFCP interoperability, protocol handover, real credentials, multiple sessions, field RF calibration and a trained controller are not claimed. Candidate metadata remains 1.0.0-rc.1. See [release report](V1_RELEASE_REPORT.md) and [validation boundaries](interop-validation.md).

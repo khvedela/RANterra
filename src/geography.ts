@@ -65,8 +65,9 @@ function boundedBuildings(items: { id: string; ring: Point[] }[]): Building[] {
   return buildings;
 }
 export async function fetchBuildings(center: Point): Promise<Building[]> {
-  if (!config.overpass && !config.osmMap) throw Error("Building providers are disabled in config.json");
-  const key = `buildings:v2:${center.map((v) => v.toFixed(4)).join(",")}`;
+  if (!config.overpass && !config.osmMap)
+    throw Error("Building providers are disabled in config.json");
+  const key = `buildings:v3:${config.overpass}:${config.osmMap}:${center.map((v) => v.toFixed(4)).join(",")}`;
   const cached = await cacheGet<Building[]>(key);
   if (cached) return cached;
   const [lon, lat] = center,
@@ -79,6 +80,7 @@ export async function fetchBuildings(center: Point): Promise<Building[]> {
   const query = `[out:json][timeout:10];way[building][building!="no"](${south},${west},${north},${east});out geom;`;
   let buildings: Building[];
   try {
+    if (!config.overpass) throw Error("Overpass disabled");
     const response = await fetch(config.overpass, {
       method: "POST",
       body: new URLSearchParams({ data: query }),
@@ -107,10 +109,10 @@ export async function fetchBuildings(center: Point): Promise<Building[]> {
         { signal: AbortSignal.timeout(15000) },
       );
       if (!response.ok) throw Error("OSM map API unavailable");
-      const xml = new DOMParser().parseFromString(
-        await boundedText(response, 5000000),
-        "application/xml",
-      );
+      const text = await boundedText(response, 5000000);
+      if (/<!DOCTYPE|<!ENTITY/i.test(text))
+        throw Error("OSM XML declarations are not supported");
+      const xml = new DOMParser().parseFromString(text, "application/xml");
       if (xml.querySelector("parsererror")) throw Error("Malformed OSM data");
       const nodes = new Map(
         Array.from(xml.querySelectorAll("node")).map((n) => [

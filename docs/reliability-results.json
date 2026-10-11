@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-11",
+  "candidate": "1.0.0-rc.1",
+  "scope": "Supported synthetic laboratory profile, not complete core interoperability or certification",
+  "runtime": "Node 24.18.0; Rust 1.97.1; Apple M3 Pro macOS arm64",
+  "rust_tests": 66,
+  "independent_peer_tests": 13,
+  "independent_codec_frames": 30,
+  "browser_tests": 22,
+  "browser_projects": [
+    "Chromium",
+    "Firefox"
+  ],
+  "mutation_inputs": 12000,
+  "parser_calls": 144000,
+  "allocation_release_cycles": 254,
+  "wasm_soak": {
+    "workload": "16384 create/register/session/20-echo/release/deregister/replay/free cycles",
+    "cycles": 16384,
+    "packets": 327680,
+    "warmup_cycles": 32,
+    "elapsed_wall_ms": 103438.373709,
+    "wasm_warmup_linear_bytes": 2097152,
+    "wasm_max_linear_bytes": 2097152,
+    "post_warmup_growth_bytes": 0,
+    "node_process_rss_bytes": 49872896
+  },
+  "coverage_guided_fuzz": {
+    "tool": "cargo-fuzz 0.13.2 / libFuzzer / AddressSanitizer",
+    "toolchain": "nightly-2026-07-20",
+    "seed": 501,
+    "elapsed_seconds": 301,
+    "executions": 837065,
+    "coverage_edges": 38113,
+    "features": 67726,
+    "corpus_entries": 7878,
+    "observed_rss_mib": 573,
+    "crashes": 0,
+    "sanitizer_findings": 0,
+    "max_input_length": 65536,
+    "single_input_timeout_seconds": 5
+  },
+  "asvs_level1": {
+    "PASS": 16,
+    "N/A": 43,
+    "PASS LOCAL": 3,
+    "PENDING HOST": 4,
+    "PASS BOUNDED": 1,
+    "N/A LAB EXCEPTION": 2,
+    "PASS WITH EXCEPTIONS": 1
+  },
+  "production_artifact_hashes_matched": 38,
+  "clean_source_install_build_native_wasm_worker_replay": "PASS",
+  "dependency_inventory_packages": 426,
+  "independent_validation_dependencies": 9,
+  "bounded_workload": {
+    "cells": 16,
+    "ues": 128,
+    "buildings": 467,
+    "samples": 1225,
+    "runs": 10,
+    "rf_median_ms": 46.03370800000005,
+    "rf_max_ms": 77.293375,
+    "registration_median_ms": 19.319875000000025,
+    "wasm_linear_memory_bytes": 6488064,
+    "node_rss_bytes": 510263296,
+    "snapshot_json_bytes": 1038013
+  },
+  "native_benchmark": {
+    "buildings": 467,
+    "cells": 16,
+    "registration_median_ms": 13.308167,
+    "rf_constructor_max_ms": 25.141582999999997,
+    "rf_constructor_median_ms": 22.445458000000002,
+    "runs": 10,
+    "samples": 1225,
+    "snapshot_json_bytes": 1038551,
+    "ues": 128,
+    "peak_rss_bytes": 10174464,
+    "rust": "1.97.1"
+  },
+  "worker_benchmark": {
+    "worker_load_roundtrip_median_ms": 49.06600000000071,
+    "worker_load_roundtrip_max_ms": 53.90325000000121,
+    "runs": 10,
+    "cells": 16,
+    "ues": 128,
+    "buildings": 467,
+    "node_process_rss_bytes": 569049088
+  },
+  "release_acceptance": "BLOCKED",
+  "remaining_gates": [
+    "Green remote CI for exact candidate commit",
+    "Authorized HTTPS hosting and configured-provider verification"
+  ],
+  "limitations": [
+    "Five-minute coverage-guided campaign is not exhaustive fuzz verification; extended soak is 103.438 seconds, not a day-long run",
+    "Authored Go/free5GC peers drive real shared state machines; no running unmodified complete core or SBI/PFCP",
+    "RSS includes host/JIT; no peak browser-tab memory or paint-latency measurement",
+    "Normal WB-N1 initial registration only; supported failed N2 cause 22, not every conditional NAS/N2 procedure",
+    "Legacy profile 2 preserves atomic sessions; new profile 3 schedules session signaling",
+    "Internal ASVS Level 1 assessment; host controls pending; no external certification"
+  ]
+}
