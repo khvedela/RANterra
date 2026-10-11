@@ -1,6 +1,12 @@
 # RANterra v1 release report
 
-**2026-10-11 — candidate 1.0.0-rc.1, target 1.0.0. Release acceptance: BLOCKED on authorized hosted verification.** The Ant Design candidate `5f13d43` passed both remote CI jobs and the local checks described below. Deployment and publication remain explicitly on hold while a free host is selected.
+**2026-10-11 — candidate 1.0.0-rc.1, target 1.0.0. Release acceptance: BLOCKED on hosted verification and revalidation of the Cloudflare routing correction.** The Ant Design candidate `5f13d43` passed both remote CI jobs and the local checks described below. Cloudflare hosting is now authorized; account authentication and hosted verification are pending. Release publication remains on hold.
+
+## Cloudflare hosting follow-up
+
+User authorization now covers a free Cloudflare Pages deployment, with `ranterra.davidkh.com` proposed as the custom domain. Both the dashboard session and the existing CLI authorization were unavailable; a phone-compatible OAuth device flow was offered. No deployment or DNS changes have yet been performed.
+
+Wrangler 4.149.0 independently exposed two previously unverified production-host defects: the broad rewrite is rejected as a loop, and default SPA fallback returns HTML/200 for missing assets. Explicit `/workspace` and `/experiment/*` rewrites to `/`, plus a top-level `404.html`, fix both behaviors without a server/backend. The local server now reads the actual rewrite file; browser tests additionally check missing WASM, unknown routes and workspace refresh. Tests can target the real hosted origin while still blocking external geographic traffic. The earlier 13-artifact CI result below remains historical evidence for the Ant candidate; the routing correction adds a 14th artifact. All 30 production browser checks passed against Wrangler Pages dev in 2.4 minutes; strengthened real worker/WASM MIME and magic assertions also passed in Chromium and Firefox. The local verifier passed its routing checks, lint/types passed, and web/full Rust/WASM builds reproduce all 14 hashes. Remote CI revalidation and actual HTTPS/custom-domain verification remain pending.
 
 ## Ant Design workspace upgrade
 
@@ -133,17 +139,17 @@ The Linux CI runner separately measured native initialization median/max **47.16
 
 ## Release gates and remaining limitations
 
-| Gate                                                                                                        | Status                                                                                            |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Clean local static boot, real browser WASM, concurrent authenticated registration and enforced NAS security | PASS for documented laboratory subset                                                             |
-| PDU session establishment, encoded N2, virtual packets, failure/teardown and protocol inspection            | PASS for one-session IPv4 subset                                                                  |
-| Movement affects radio/state; equations validated and limitations documented                                | PASS for specified models and reassociation                                                       |
-| Save/restore/import/export/replay and transactional invalid-input handling                                  | PASS for bounded supported actions/profiles                                                       |
-| Local automated validation and applicable local security checks                                             | PASS within the explicit test/assessment scope                                                    |
-| Green remote CI for the candidate application/workflow                                                      | **PASS** at tested application/workflow `5f13d43`; evidence-only follow-up does not change assets |
-| Authorized production HTTPS deployment/provider verification                                                | OPEN — no deployment authorized/performed                                                         |
-| Stable v1.0 release eligibility                                                                             | **FAIL / BLOCKED until authorized hosted verification passes**                                    |
+| Gate                                                                                                        | Status                                                                               |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Clean local static boot, real browser WASM, concurrent authenticated registration and enforced NAS security | PASS for documented laboratory subset                                                |
+| PDU session establishment, encoded N2, virtual packets, failure/teardown and protocol inspection            | PASS for one-session IPv4 subset                                                     |
+| Movement affects radio/state; equations validated and limitations documented                                | PASS for specified models and reassociation                                          |
+| Save/restore/import/export/replay and transactional invalid-input handling                                  | PASS for bounded supported actions/profiles                                          |
+| Local automated validation and applicable local security checks                                             | PASS within the explicit test/assessment scope                                       |
+| Green remote CI for the candidate application/workflow                                                      | **PENDING** for the routing correction; previous Ant candidate passed at `5f13d43`   |
+| Authorized production HTTPS deployment/provider verification                                                | OPEN — deployment authorized; account authentication and hosted verification pending |
+| Stable v1.0 release eligibility                                                                             | **FAIL / BLOCKED until routing CI and hosted verification pass**                     |
 
 Deliberate limitations remain visible: no production subscriber credentials; no RRC/AS security/PHY/NG setup/SCTP/internet forwarding/SBI/PFCP; one IPv4 session per UE, fixed QFI/5QI and no throughput enforcement; limited timer/failure variants; no protocol handover or automatic mobility reconnection; no RSRQ, terrain or height/material-aware RF; no WebKit/mobile certification, field calibration or measured browser-paint/peak-memory budget; bounded histories/journals and pool exhaustion after 254 allocations until reset; synchronous bounded replay/grid computation in a worker; advisory extension traits and no-op controller rather than a trained policy. Large geography bundle warnings remain.
 
-These limits are not renamed successes. Expansion beyond the documented research subset requires further implementation and validation. The candidate stays **1.0.0-rc.1**. Candidate and corrective commits are pushed. Deployment/publication remains withheld pending host selection and separate authorization.
+These limits are not renamed successes. Expansion beyond the documented research subset requires further implementation and validation. The candidate stays **1.0.0-rc.1**. Candidate and corrective commits are pushed. Cloudflare deployment is authorized but awaits account access and hosted verification. Release publication is still withheld.

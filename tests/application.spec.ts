@@ -11,6 +11,16 @@ async function choose(page: Page, label: string, value: string) {
     .click();
 }
 const minimal = JSON.parse(readFileSync("examples/minimal.json", "utf8"));
+async function blockGeographicRequests(page: Page) {
+  const origin = new URL(
+    process.env.RANTERRA_TEST_ORIGIN ?? "http://127.0.0.1:4173",
+  ).origin;
+  await page.route(/^https:\/\//, (route) =>
+    new URL(route.request().url()).origin === origin
+      ? route.fallback()
+      : route.abort(),
+  );
+}
 test.beforeEach(async ({ page }) => {
   // Disable geographic network assets; never automate public OSM tile traffic.
   await page.route("**/config.json", (route) =>
@@ -18,7 +28,7 @@ test.beforeEach(async ({ page }) => {
       json: { tiles: "", search: "", overpass: "", osmMap: "" },
     }),
   );
-  await page.route(/^https:\/\//, (route) => route.abort());
+  await blockGeographicRequests(page);
   await page.goto("/");
   await expect(
     page.getByRole("button", { name: "Run simulation", exact: true }),
@@ -187,12 +197,30 @@ test("static hosting MIME, headers and route refresh", async ({ request }) => {
   expect(asset.headers()["cache-control"]).toBe(
     "public, max-age=31536000, immutable",
   );
+  const workerPath = (await asset.text()).match(
+    /\/assets\/engine\.worker-[\w-]+\.js/,
+  )?.[0];
+  expect(workerPath).toBeTruthy();
+  const worker = await request.get(workerPath!);
+  expect(worker.status()).toBe(200);
+  expect(worker.headers()["content-type"]).toContain("javascript");
+  const wasmName = (await worker.text()).match(
+    /ranterra_engine_bg-[\w-]+\.wasm/,
+  )?.[0];
+  expect(wasmName).toBeTruthy();
+  const wasm = await request.get(`/assets/${wasmName}`);
+  expect(wasm.status()).toBe(200);
+  expect(wasm.headers()["content-type"]).toBe("application/wasm");
+  expect([...(await wasm.body()).subarray(0, 4)]).toEqual([0, 97, 115, 109]);
   for (const path of ["/", "/index.html", "/config.json"]) {
     expect((await request.get(path)).headers()["cache-control"]).toBe(
       "no-cache",
     );
   }
   expect((await request.get("/missing.js")).status()).toBe(404);
+  expect((await request.get("/assets/missing.wasm")).status()).toBe(404);
+  expect((await request.get("/unknown-route")).status()).toBe(404);
+  expect((await request.get("/workspace")).status()).toBe(200);
 });
 
 test("configurable service, checkpoint persistence, import replay and comparison", async ({
@@ -372,7 +400,7 @@ test("IndexedDB v1 migration preserves scenarios and quota failure remains recov
       json: { tiles: "", search: "", overpass: "", osmMap: "" },
     }),
   );
-  await page.route(/^https:\/\//, (route) => route.abort());
+  await blockGeographicRequests(page);
   await page.goto("/migration-setup");
   await page.evaluate(
     async (scenario) => {

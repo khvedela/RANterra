@@ -4,6 +4,7 @@
 
 Target release: 1.0.0. Release eligibility remains blocked; see `docs/V1_RELEASE_REPORT.md`.
 
+- Fix Cloudflare Pages routing using explicit root-document rewrites and a custom 404 page; validate the actual Pages runtime and support browser checks against a hosted origin.
 - Redesign the research workspace with Ant Design 6.6.5, semantic tokens, accessible primary contrast, metric cards, results table, focus-safe dialogs and responsive entity/setup drawers.
 - Preserve real map/protocol workflows; fix overlay/legend click obstruction and a checkpoint restore/export race. Add production keyboard, responsive editing and automated accessibility checks (30 browser checks total).
 - Replace bundled fonts with platform typography and review development-only MPL accessibility validators separately from runtime license approvals.
