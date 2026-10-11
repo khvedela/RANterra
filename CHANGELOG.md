@@ -4,6 +4,9 @@
 
 Target release: 1.0.0. Release eligibility remains blocked; see `docs/V1_RELEASE_REPORT.md`.
 
+- Redesign the research workspace with Ant Design 6.6.5, semantic tokens, accessible primary contrast, metric cards, results table, focus-safe dialogs and responsive entity/setup drawers.
+- Preserve real map/protocol workflows; fix overlay/legend click obstruction and a checkpoint restore/export race. Add production keyboard, responsive editing and automated accessibility checks (30 browser checks total).
+- Replace bundled fonts with platform typography and review development-only MPL accessibility validators separately from runtime license approvals.
 - Replace unconditional registration rejection with real synthetic 5G-AKA, NIA2/NEA2 security, Registration Accept/Complete and protected deregistration.
 - Add independent subscriber contexts, laboratory failure injection and cryptographic/reference tests.
 - Add protected N1 session signaling, NGAP resource setup/release, virtual IPv4/ICMP echo over GTP-U and logical context cleanup.

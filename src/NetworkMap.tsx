@@ -1,3 +1,4 @@
+import { ControlButton } from "./ui";
 import { config } from "./config";
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
@@ -53,7 +54,10 @@ export default function NetworkMap(props: Props) {
         zoom: 15.5,
         maxZoom: 19,
         minZoom: 3,
-        attributionControl: { compact: false },
+        attributionControl: {
+          compact: false,
+          customAttribution: config.attribution,
+        },
         style: {
           version: 8,
           sources: config.tiles
@@ -70,7 +74,7 @@ export default function NetworkMap(props: Props) {
             {
               id: "background",
               type: "background",
-              paint: { "background-color": "#e6e9e3" },
+              paint: { "background-color": "#eef1f4" },
             },
             ...(config.tiles
               ? [
@@ -226,8 +230,8 @@ export default function NetworkMap(props: Props) {
           id: "buildings",
           data: props.buildings ? scenario.buildings : [],
           getPolygon: (d) => d.ring,
-          getFillColor: [80, 105, 93, 55],
-          getLineColor: [74, 98, 85, 105],
+          getFillColor: [89, 104, 125, 55],
+          getLineColor: [89, 104, 125, 105],
           stroked: true,
           lineWidthMinPixels: 0.5,
         }),
@@ -238,7 +242,7 @@ export default function NetworkMap(props: Props) {
           getRadius: 230,
           filled: false,
           stroked: true,
-          getLineColor: [34, 108, 78, 90],
+          getLineColor: [9, 88, 217, 90],
           lineWidthMinPixels: 1,
         }),
         new LineLayer({
@@ -246,7 +250,7 @@ export default function NetworkMap(props: Props) {
           data: props.links ? associations : [],
           getSourcePosition: (d) => d.from,
           getTargetPosition: (d) => d.to,
-          getColor: [41, 113, 90, 190],
+          getColor: [9, 88, 217, 190],
           getWidth: 1.5,
           parameters: { depthWriteEnabled: false },
         }),
@@ -268,27 +272,27 @@ export default function NetworkMap(props: Props) {
         <span className="divider">/</span> <span>WGS 84</span>
       </div>
       <div className="map-tools">
-        <button title="Zoom in" onClick={() => map.current?.zoomIn()}>
+        <ControlButton title="Zoom in" onClick={() => map.current?.zoomIn()}>
           <Plus size={18} />
-        </button>
-        <button title="Zoom out" onClick={() => map.current?.zoomOut()}>
+        </ControlButton>
+        <ControlButton title="Zoom out" onClick={() => map.current?.zoomOut()}>
           <Minus size={18} />
-        </button>
+        </ControlButton>
         <hr />
-        <button
+        <ControlButton
           title="Recenter scenario"
           onClick={() =>
             map.current?.flyTo({ center: props.scenario.center, zoom: 15.5 })
           }
         >
           <LocateFixed size={18} />
-        </button>
-        <button
+        </ControlButton>
+        <ControlButton
           title="Set study center to current map position"
           onClick={() => props.onCenter(position)}
         >
           <Crosshair size={18} />
-        </button>
+        </ControlButton>
       </div>
       <div className="map-guide">
         <MapPin size={14} />
@@ -317,9 +321,9 @@ export default function NetworkMap(props: Props) {
         {position[1].toFixed(5)}° N &nbsp; {position[0].toFixed(5)}° E
       </div>
       {mapError && (
-        <button className="map-warning" onClick={() => setMapError("")}>
+        <ControlButton className="map-warning" onClick={() => setMapError("")}>
           {mapError} ×
-        </button>
+        </ControlButton>
       )}
     </div>
   );

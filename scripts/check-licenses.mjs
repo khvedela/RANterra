@@ -75,7 +75,19 @@ const dependencies = [
       license: v.license,
     })),
 ];
-const unknown = dependencies.filter((p) => !approved.has(p.license));
+// File-level MPL was separately reviewed for the unmodified, test-only axe tools.
+// Do not silently admit MPL into application/runtime dependencies.
+const accessibilityTools = new Set(["@axe-core/playwright", "axe-core"]);
+const unknown = dependencies.filter(
+  (p) =>
+    !approved.has(p.license) &&
+    !(
+      p.ecosystem === "npm" &&
+      p.license === "MPL-2.0" &&
+      accessibilityTools.has(p.name) &&
+      lock.packages[`node_modules/${p.name}`]?.dev === true
+    ),
+);
 await writeFile(
   "docs/DEPENDENCIES.json",
   JSON.stringify(dependencies, null, 2) + "\n",

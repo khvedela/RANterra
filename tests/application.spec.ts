@@ -1,5 +1,15 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
+// Ant Select uses an accessible popup rather than a native select element.
+async function choose(page: Page, label: string, value: string) {
+  await page.getByRole("combobox", { name: label, exact: true }).click();
+  await page
+    .getByRole("option", {
+      name: label === "Simulation speed" ? `${value}×` : value,
+      exact: true,
+    })
+    .click();
+}
 const minimal = JSON.parse(readFileSync("examples/minimal.json", "utf8"));
 test.beforeEach(async ({ page }) => {
   // Disable geographic network assets; never automate public OSM tile traffic.
@@ -26,7 +36,10 @@ test("production boot, registration, secured session, offline echo and teardown"
 }) => {
   await expect(page.locator(".maplibregl-canvas")).toBeVisible();
   await expect(page.locator(".map-warning")).toHaveCount(0);
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText(
+    "OpenStreetMap contributors",
+  );
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -80,11 +93,11 @@ test("invalid subscriber, import rejection and saved scenario persistence", asyn
   await page
     .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
     .click();
-  await page.getByLabel("Laboratory fault").selectOption("InvalidCredentials");
+  await choose(page, "Laboratory fault", "InvalidCredentials");
   await expect(
     page.getByRole("button", { name: "Run simulation", exact: true }),
   ).toBeEnabled();
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -109,7 +122,7 @@ test("invalid subscriber, import rejection and saved scenario persistence", asyn
   await page
     .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
     .click();
-  await expect(page.getByLabel("Laboratory fault")).toHaveValue(
+  await expect(page.getByLabel("Laboratory fault").locator("..")).toContainText(
     "InvalidCredentials",
   );
 });
@@ -198,7 +211,9 @@ test("configurable service, checkpoint persistence, import replay and comparison
   await expect(
     page.getByRole("button", { name: "Apply policies", exact: true }),
   ).toBeEnabled();
-  await page.getByLabel("Close policies").click();
+  await page
+    .getByRole("button", { name: "Close policies", exact: true })
+    .click();
   await page
     .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
     .click();
@@ -217,7 +232,7 @@ test("configurable service, checkpoint persistence, import replay and comparison
   await expect(
     page.getByRole("button", { name: "Run simulation", exact: true }),
   ).toBeEnabled();
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -311,7 +326,7 @@ test("policy denial exposes genuine failure and prevents session traffic", async
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(denied)),
   });
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -419,11 +434,11 @@ test("AUTS synchronization failure recovers to registered and usable session", a
   await page
     .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
     .click();
-  await page.getByLabel("Laboratory fault").selectOption("SqnOutOfSync");
+  await choose(page, "Laboratory fault", "SqnOutOfSync");
   await expect(
     page.getByRole("button", { name: "Run simulation", exact: true }),
   ).toBeEnabled();
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -455,9 +470,9 @@ test("timed signaling recovers registration loss and releases failed N2 resource
   await page
     .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
     .click();
-  await page.getByLabel("Signaling loss").selectOption("SecurityModeComplete");
+  await choose(page, "Signaling loss", "SecurityModeComplete");
   await page.getByLabel("Signaling drop count").fill("1");
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -497,9 +512,9 @@ test("exhausted Registration Complete delivery never reports verified registrati
   await page
     .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
     .click();
-  await page.getByLabel("Signaling loss").selectOption("RegistrationComplete");
+  await choose(page, "Signaling loss", "RegistrationComplete");
   await page.getByLabel("Signaling drop count").fill("5");
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -540,7 +555,7 @@ test("untrusted labels remain text and blocked storage leaves computation usable
   expect(await page.evaluate(() => Object.hasOwn(globalThis, "injected"))).toBe(
     false,
   );
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -569,7 +584,7 @@ test("unavailable WebGL leaves a visible map error and usable simulation", async
   await expect(
     page.getByRole("button", { name: "Run simulation", exact: true }),
   ).toBeEnabled();
-  await page.getByLabel("Simulation speed").selectOption("10");
+  await choose(page, "Simulation speed", "10");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -580,4 +595,96 @@ test("unavailable WebGL leaves a visible map error and usable simulation", async
   await expect(
     page.getByRole("dialog", { name: "Experiment results" }),
   ).toBeVisible();
+});
+
+test("Ant dialogs trap focus, close with Escape and return focus to the trigger", async ({
+  page,
+}) => {
+  const trigger = page.getByRole("button", { name: "Results", exact: true });
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", {
+    name: "Experiment results",
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeInViewport();
+  await expect(dialog).toHaveCSS("opacity", "1");
+  for (let i = 0; i < 20; i++) {
+    await page.keyboard.press("Tab");
+    await expect
+      .poll(() => dialog.evaluate((el) => el.contains(document.activeElement)))
+      .toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test("mobile workspace keeps the map usable and opens editable inspectors in drawers", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".maplibregl-canvas")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    )
+    .toBe(true);
+  await page
+    .getByRole("button", { name: "Network setup", exact: true })
+    .click();
+  const setup = page.getByRole("dialog", {
+    name: "Network setup",
+    exact: true,
+  });
+  await expect(setup.getByRole("combobox", { name: "RF model" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(setup).toBeHidden();
+  await page
+    .getByRole("button", { name: `Select ${minimal.ues[0].name}`, exact: true })
+    .click();
+  const inspector = page.getByRole("dialog", {
+    name: "Entity inspector",
+    exact: true,
+  });
+  await expect(inspector.getByLabel("Entity name")).toBeVisible();
+  await inspector.getByLabel("Entity name").fill("Mobile research UE");
+  await inspector.getByLabel("Entity name").press("Tab");
+  await expect(
+    inspector.getByRole("heading", { name: "Mobile research UE", exact: true }),
+  ).toBeVisible();
+  await inspector.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(inspector).toBeHidden();
+  await page.screenshot({
+    path: `test-results/mobile-workspace-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+});
+
+test("workspace and results have no serious or critical automated accessibility violations", async ({
+  page,
+}) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  const check = async () => {
+    const audit = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      .analyze();
+    expect(
+      audit.violations.filter(
+        (v) => v.impact === "serious" || v.impact === "critical",
+      ),
+    ).toEqual([]);
+  };
+  await check();
+  await page.getByRole("button", { name: "Results", exact: true }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Experiment results",
+    exact: true,
+  });
+  await expect(dialog).toBeInViewport();
+  await expect(dialog).toHaveCSS("opacity", "1");
+  await check();
 });

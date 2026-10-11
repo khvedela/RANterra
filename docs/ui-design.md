@@ -1,0 +1,23 @@
+# Research workspace design
+
+The workspace uses Ant Design **6.6.5**, following the requested [Ant Design visual language](https://ant.design/design.md). The implementation uses `ConfigProvider`, Layout, Menu, Card, Input, Select, Button, Tooltip, Checkbox, Switch, Badge, Tag, Statistic, Table, Empty, Modal and Drawer. Local emulation remains in the existing Rust/WASM worker; presentation controls never manufacture protocol success.
+
+The interface uses system typography at 14 px, weights 400/600, a 4 px spacing grid, neutral container/layout surfaces and 6/8 px control/panel corners. The primary action uses Ant's darker blue `#0958d9` to improve small white text contrast. Description and tertiary text use `#595959`. Workspace CSS inherits semantic surface, text, border and elevation tokens from `theme.useToken()` instead of carrying forward the old green theme. Scientific coverage colors retain their existing meaning; blue serving links and markers distinguish UI selection from signal strength.
+
+The desktop layout separates study area, deployment/entities/layers, the map/protocol timeline and the entity inspector. A persistent metric strip shows registrations, active sessions, delivered packets and **virtual** seconds. Results use statistics and a per-cell table. Scenario policies and assumptions use Ant dialogs with keyboard focus trapping, Escape dismissal and focus restoration. A small Tab boundary guard prevents focus entering browser chrome at the last native control; Ant handles the rest of the dialog lifecycle. On viewports below 992 px, setup and inspection move into drawers; selecting a map entity opens its inspector. Short desktop windows scroll rather than clipping the protocol timeline. No layer or simulation fidelity is reduced to fit a viewport.
+
+Passive map annotations do not intercept marker clicks or deployment. deck.gl remains within the map's stacking context so RF coverage cannot tint controls or entity markers. Geometry and protocol rendering remain bounded as before. The map is not remounted when panels or playback state change. Provider attribution remains visible even when remote tiles are disabled, so loaded OSM geometry retains its credit. Map errors wrap fully instead of truncating recovery instructions.
+
+`src/ui.tsx` adapts the existing form contracts to Ant controls: button `type` remains native form `htmlType`; the value adapter for Select preserves the existing value-only command handlers; responsive panels preserve entity editing. Numbers retain native validation on the actual input element. This avoids changing engine command or scenario schemas as part of a visual redesign.
+
+Checkpoint restore now disables export **before** the asynchronous IndexedDB read. This prevents an old-revision export racing reconstruction. Worker acknowledgements still decide when the restored state becomes usable, and failed storage reads leave the previous experiment available.
+
+## Verification
+
+Production browser tests continue to use actual WASM/protocol execution under the static server's CSP, with geographic network providers disabled. Additional tests exercise mobile editing at 390×844, dialog focus containment/Escape/return, and axe WCAG A/AA rules for serious/critical findings in the workspace and results dialog. Automated checks are not a full WCAG certification; map gestures and assistive technology behavior still benefit from manual review. Screenshots use loaded scenario geometry and intentionally omit remote tiles; no synthetic network state is inserted for presentation.
+
+## Dependency licensing
+
+Ant Design and its introduced runtime dependencies use the reviewed permissive licenses recorded in `DEPENDENCIES.json`. Removed font packages are no longer bundled; typography uses platform fonts.
+
+`@axe-core/playwright` and `axe-core` 4.13.0 are **MPL-2.0**, used unmodified as development-only accessibility validators. They are imported only by Playwright tests, never by application code or deployment assets. The license check admits these two names only when the lockfile marks them development dependencies; MPL is not added to the generic approved runtime license set. RANterra's original source remains MIT. If redistributing the validators, retain their notices and make their covered source available under MPL; modifications to covered files would remain MPL. See the [MPL text](https://www.mozilla.org/en-US/MPL/2.0/) and [Mozilla FAQ, Q8/Q11](https://www.mozilla.org/en-US/MPL/2.0/FAQ/), and the upstream [axe-core source](https://github.com/dequelabs/axe-core) / [axe-core Playwright source](https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright). No upstream source is copied into this repository.

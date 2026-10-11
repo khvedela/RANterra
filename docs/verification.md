@@ -1,6 +1,10 @@
 # Verification record — 2026-10-11
 
-Evidence applies to the current **1.0.0-rc.1 research candidate**, not certification. [Release acceptance](V1_RELEASE_REPORT.md) remains blocked on authorized HTTPS hosting verification; the candidate application/workflow passes remote CI. Counts and raw measurements are retained in [reliability-results.json](reliability-results.json) and [benchmark-results.json](benchmark-results.json).
+Evidence applies to the current **1.0.0-rc.1 research candidate**, not certification. [Release acceptance](V1_RELEASE_REPORT.md) remains blocked on authorized HTTPS hosting verification; the previous application/workflow passed remote CI; the Ant workspace follow-up is being revalidated. Counts and raw measurements are retained in [reliability-results.json](reliability-results.json) and [benchmark-results.json](benchmark-results.json).
+
+## Ant workspace follow-up
+
+The unchanged production baseline passed 24 browser checks before the visual migration. After the Ant Design 6.6.5 migration and reliability fixes, 30 production checks passed in Chromium/Firefox: the 12 existing workflows plus dialog focus trapping/Escape/return, responsive editing at 390×844, and axe WCAG A/AA serious/critical scans per browser. This uses the actual WASM worker and static server CSP. `npm test` again passed all 66 Rust tests and actual WASM/worker/native replay; lint, types, input bounds and zero-vulnerability npm audit also pass. A full Rust/WASM production build matches all 12 hashes from the web build; removed font packages account for the old artifact-count difference. The license inventory now covers 492 packages, with named development-only MPL accessibility tools reviewed in [UI design](ui-design.md). No physical device, WebKit run or external accessibility certification is claimed. Remote follow-up evidence is recorded in the [release report](V1_RELEASE_REPORT.md).
 
 ## Baseline and final local checks
 
@@ -26,7 +30,7 @@ The isolated `validation/fuzz` harness, cargo-fuzz 0.13.2 and nightly-2026-07-20
 
 `RANTERRA_SOAK_CYCLES=16384 npm run test:soak` completed **16,384** create/register/session/20-echo/release/deregister/replay/free cycles with **327,680** original echo requests in **103,438.373709 ms wall time**. Linear memory was **2,097,152 bytes** at warm-up and maximum, with **zero growth after 32 cycles**. Sampled Node RSS was 49,872,896 bytes. This extended workload is still approximately 103 seconds, not an hours-long soak or browser-memory proof. The CI default is 128 cycles.
 
-Browser quota/denied-access tests inject failures; actual disk exhaustion and all browser storage implementations are not validated. No WebKit/mobile or external penetration test ran. The [internal ASVS Level 1 assessment](asvs-assessment.json) contains 70 applicability/evidence decisions; four TLS/HSTS host requirements remain pending. It is not certification.
+Browser quota/denied-access tests inject failures; actual disk exhaustion and all browser storage implementations are not validated. No WebKit, physical mobile device or external penetration test ran. The [internal ASVS Level 1 assessment](asvs-assessment.json) contains 70 applicability/evidence decisions; four TLS/HSTS host requirements remain pending. It is not certification.
 
 ## Dependency and CI evidence
 

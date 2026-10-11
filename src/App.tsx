@@ -1,4 +1,25 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  Alert,
+  Badge,
+  Card,
+  Checkbox,
+  Empty,
+  Input,
+  Layout,
+  Menu,
+  Statistic,
+  Switch,
+  Table,
+  Tag,
+  theme,
+} from "antd";
+import {
+  ControlButton,
+  SelectField,
+  WorkspacePanel,
+  ResearchModal,
+} from "./ui";
 import {
   Activity,
   ArrowDownToLine,
@@ -17,7 +38,6 @@ import {
   Pause,
   Play,
   Plus,
-  Radio,
   RotateCcw,
   Search,
   Settings2,
@@ -26,7 +46,6 @@ import {
   SkipForward,
   Smartphone,
   Trash2,
-  X,
 } from "lucide-react";
 import NetworkMap from "./NetworkMap";
 import { demo } from "./defaults";
@@ -67,6 +86,9 @@ function prettyState(s?: string) {
   return s?.replace(/([a-z])([A-Z])/g, "$1 $2") ?? "Idle";
 }
 export default function App() {
+  const { token } = theme.useToken();
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [workerEpoch, setWorkerEpoch] = useState(0);
   const [scenario, setScenario] = useState<Scenario>(demo),
     [snapshot, setSnapshot] = useState<Snapshot | null>(null),
@@ -202,6 +224,23 @@ export default function App() {
       type,
       revision: activeRevision.current,
     } satisfies WorkerCommand);
+  }
+  async function restoreRun() {
+    // Loading IndexedDB is asynchronous: disable export before reading so an old
+    // revision cannot be exported while a checkpoint begins reconstruction.
+    setPending(true);
+    let applied = false;
+    try {
+      const recording = await loadRun();
+      if (recording) {
+        apply(recording);
+        applied = true;
+      } else setNotice("No saved run checkpoint.");
+    } catch (e) {
+      setNotice(String(e));
+    } finally {
+      if (!applied) setPending(false);
+    }
   }
   function apply(s: Scenario | Recording) {
     setPending(true);
@@ -528,40 +567,71 @@ export default function App() {
     .reduce((a, u) => a + u.rsrp!, 0);
   const signalCount = snapshot?.ues.filter((u) => u.rsrp !== null).length ?? 0;
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <a href="/" className="brand">
+    <Layout
+      className="app-shell"
+      style={
+        {
+          "--surface": token.colorBgContainer,
+          "--layout": token.colorBgLayout,
+          "--fill": token.colorFillAlter,
+          "--line": token.colorBorderSecondary,
+          "--border": token.colorBorder,
+          "--ink": token.colorText,
+          "--muted": token.colorTextSecondary,
+          "--primary": token.colorPrimary,
+          "--selection": token.controlItemBgActive,
+          "--success": token.colorSuccess,
+          "--error": token.colorError,
+          "--warning": token.colorWarning,
+          "--radius": `${token.borderRadius}px`,
+          "--shadow": token.boxShadowSecondary,
+          "--shadow-raised": token.boxShadowTertiary,
+        } as CSSProperties
+      }
+    >
+      <Layout.Header className="topbar">
+        <a href="/" className="brand" aria-label="RANterra home">
           <span className="brand-symbol">
-            <Layers size={23} />
+            <Layers size={22} />
           </span>
-          RAN<span>terra</span>
-          <small>RESEARCH PLAYGROUND</small>
+          <span>RANterra</span>
+          <Tag color="blue">RESEARCH</Tag>
         </a>
-        <div className="top-tabs">
-          <span className="active">
-            <Box size={15} /> Workspace
-          </span>
-          <button onClick={() => setModelOpen(true)}>
-            <FlaskConical size={15} /> Models & assumptions
-          </button>
-        </div>
+        <Menu
+          mode="horizontal"
+          selectedKeys={["workspace"]}
+          className="workspace-menu"
+          items={[
+            { key: "workspace", icon: <Box size={16} />, label: "Workspace" },
+            {
+              key: "models",
+              icon: <FlaskConical size={16} />,
+              label: "Models & assumptions",
+              onClick: () => setModelOpen(true),
+            },
+          ]}
+        />
         <div className="runtime">
-          <span className={`live-dot ${error ? "bad" : ""}`} />
-          {error
-            ? "Engine error"
-            : pending
-              ? "Loading engine"
-              : "Rust + WebAssembly"}
-          <span className="local-pill">LOCAL</span>
+          <Badge
+            status={error ? "error" : pending ? "processing" : "success"}
+            text={
+              error
+                ? "Engine error"
+                : pending
+                  ? "Loading engine"
+                  : "Rust + WebAssembly"
+            }
+          />
+          <Tag>LOCAL</Tag>
         </div>
-      </header>
+      </Layout.Header>
       <div className="workspace-bar">
         <div>
           <div className="eyebrow">
-            EXPERIMENT / 001 <span>5G SA · CONTROL PLANE</span>
+            RESEARCH WORKSPACE <span>5G standalone · browser simulation</span>
           </div>
           <h1>
-            <input
+            <Input
               aria-label="Scenario name"
               key={scenario.name}
               defaultValue={scenario.name}
@@ -575,8 +645,6 @@ export default function App() {
               }}
             />
           </h1>
-        </div>
-        <div className="workspace-actions">
           <span className="saved">
             <Check size={13} />
             {saved
@@ -585,12 +653,18 @@ export default function App() {
                 ? "Computing…"
                 : "Local workspace"}
           </span>
-          <button onClick={() => setResultsOpen(true)}>Results</button>
-          <button onClick={() => setPoliciesOpen(true)}>
+        </div>
+        <div className="workspace-actions">
+          <ControlButton onClick={() => setResultsOpen(true)}>
+            Results
+          </ControlButton>
+          <ControlButton onClick={() => setPoliciesOpen(true)}>
             Session policies
-          </button>
-          <button onClick={() => void saveCopy()}>Save copy</button>
-          <select
+          </ControlButton>
+          <ControlButton onClick={() => void saveCopy()}>
+            Save copy
+          </ControlButton>
+          <SelectField
             aria-label="Saved scenarios"
             value=""
             onFocus={() => {
@@ -609,63 +683,108 @@ export default function App() {
                 {s.name}
               </option>
             ))}
-          </select>
-          <button
+          </SelectField>
+          <ControlButton
             onClick={() => {
               importPurpose.current = "restore";
               file.current?.click();
             }}
           >
             <ArrowUpFromLine size={15} /> Import
-          </button>
-          <button onClick={() => download("ranterra-scenario.json", scenario)}>
-            <ArrowDownToLine size={15} /> Export
-          </button>
-          <button
-            className="run-button"
-            disabled={
-              pending || !!error || scenario.ues.length === 0 || !!completed
-            }
-            onClick={() => command(running ? "pause" : "play")}
+          </ControlButton>
+          <ControlButton
+            onClick={() => download("ranterra-scenario.json", scenario)}
           >
-            {running ? <Pause size={15} /> : <Play size={15} />}{" "}
-            {running
-              ? "Pause"
-              : completed
-                ? "Exchange complete"
-                : snapshot?.started
-                  ? "Resume"
-                  : "Run simulation"}
-          </button>
+            <ArrowDownToLine size={15} /> Export
+          </ControlButton>
+        </div>
+        <ControlButton
+          className="run-button"
+          disabled={
+            pending || !!error || scenario.ues.length === 0 || !!completed
+          }
+          onClick={() => command(running ? "pause" : "play")}
+        >
+          {running ? <Pause size={15} /> : <Play size={15} />}{" "}
+          {running
+            ? "Pause"
+            : completed
+              ? "Exchange complete"
+              : snapshot?.started
+                ? "Resume"
+                : "Run simulation"}
+        </ControlButton>
+      </div>
+      <div
+        className="workspace-overview"
+        role="region"
+        aria-label="Network metrics"
+      >
+        <Statistic
+          title="Registered UEs"
+          value={registered}
+          suffix={`/ ${scenario.ues.length}`}
+        />
+        <Statistic
+          title="Active PDU sessions"
+          value={snapshot?.sessions.filter((s) => s.active).length ?? 0}
+        />
+        <Statistic
+          title="Echo packets delivered"
+          value={snapshot?.sessions.reduce((n, s) => n + s.delivered, 0) ?? 0}
+        />
+        <Statistic
+          title="Simulation time"
+          value={(snapshot?.time_ms ?? 0) / 1000}
+          precision={3}
+          suffix="s virtual"
+        />
+        <div className="overview-model">
+          <Tag color="blue">
+            {radio.model === "Legacy" ? "Legacy RF" : `3GPP ${radio.model}`}
+          </Tag>
+          <span>Seed {scenario.seed} · deterministic</span>
+        </div>
+        <div className="mobile-panel-actions">
+          <ControlButton onClick={() => setSetupOpen(true)}>
+            <Layers size={16} /> Network setup
+          </ControlButton>
+          <ControlButton onClick={() => setInspectorOpen(true)}>
+            <Settings2 size={16} /> Entity inspector
+          </ControlButton>
         </div>
       </div>
-      <main className="workspace">
-        <aside className="left-panel">
-          <section className="location-section">
+      <Layout.Content className="workspace">
+        <WorkspacePanel
+          side="left"
+          open={setupOpen}
+          onClose={() => setSetupOpen(false)}
+        >
+          <Card size="small" className="location-section">
             <div className="section-label">
               <span>STUDY AREA</span>
               <MapPin size={14} />
             </div>
             <form onSubmit={search} className="search-box">
               <Search size={16} />
-              <input
+              <Input
                 aria-label="Search location"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search city or lon, lat"
               />
-              <button
+              <ControlButton
                 aria-label="Find location"
                 disabled={searching}
                 type="submit"
               >
                 {searching ? "…" : "↵"}
-              </button>
+              </ControlButton>
             </form>
             {places.length > 0 && (
               <div className="place-results">
                 {places.map((p, i) => (
-                  <button
+                  <ControlButton
                     key={i}
                     onClick={() => {
                       apply({
@@ -680,13 +799,13 @@ export default function App() {
                     }}
                   >
                     {p.display_name}
-                  </button>
+                  </ControlButton>
                 ))}
               </div>
             )}
             <label>
               RF model{" "}
-              <select
+              <SelectField
                 aria-label="RF model"
                 value={radio.model}
                 onChange={(e) => {
@@ -704,24 +823,23 @@ export default function App() {
                 {["Legacy", "UMi", "UMa"].map((m) => (
                   <option key={m}>{m}</option>
                 ))}
-              </select>
+              </SelectField>
             </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={radio.shadow_fading}
-                onChange={(e) =>
-                  apply({
-                    ...scenario,
-                    radio: { ...radio, shadow_fading: e.target.checked },
-                  })
-                }
-              />{" "}
+            <Checkbox
+              checked={radio.shadow_fading}
+              onChange={(e) =>
+                apply({
+                  ...scenario,
+                  radio: { ...radio, shadow_fading: e.target.checked },
+                })
+              }
+            >
+              {" "}
               Seeded shadow fading
-            </label>
+            </Checkbox>
             <label>
               Duration (virtual s){" "}
-              <input
+              <Input
                 aria-label="Experiment duration"
                 type="number"
                 min={1}
@@ -743,7 +861,7 @@ export default function App() {
                 {scenario.center[1].toFixed(4)}, {scenario.center[0].toFixed(4)}
               </span>
             </div>
-            <button
+            <ControlButton
               className="load-buildings"
               disabled={loadingBuildings || pending}
               onClick={loadBuildings}
@@ -751,15 +869,15 @@ export default function App() {
               <Box size={14} />
               {loadingBuildings ? "Loading geometry…" : "Load OSM buildings"}
               <span>{scenario.buildings.length}</span>
-            </button>
-          </section>
-          <section>
+            </ControlButton>
+          </Card>
+          <Card size="small" className="deployment-section">
             <div className="section-label">
               <span>DEPLOY NETWORK</span>
               <Plus size={14} />
             </div>
             <div className="deploy-buttons">
-              <button
+              <ControlButton
                 className={mode === "gnodeb" ? "chosen" : ""}
                 onClick={() => setMode(mode === "gnodeb" ? "select" : "gnodeb")}
                 disabled={pending}
@@ -767,8 +885,8 @@ export default function App() {
                 <Antenna size={21} />
                 <strong>gNodeB</strong>
                 <span>Base station</span>
-              </button>
-              <button
+              </ControlButton>
+              <ControlButton
                 className={mode === "ue" ? "chosen" : ""}
                 onClick={() => setMode(mode === "ue" ? "select" : "ue")}
                 disabled={pending}
@@ -776,11 +894,11 @@ export default function App() {
                 <Smartphone size={21} />
                 <strong>UE</strong>
                 <span>User equipment</span>
-              </button>
+              </ControlButton>
             </div>
             <p className="hint">Choose an entity, then place it on the map.</p>
-          </section>
-          <section className="entities-section">
+          </Card>
+          <Card size="small" className="entities-section">
             <div className="section-label">
               <span>NETWORK ENTITIES</span>
               <span className="count">
@@ -838,8 +956,8 @@ export default function App() {
                 </button>
               );
             })}
-          </section>
-          <section className="layer-section">
+          </Card>
+          <Card size="small" className="layer-section">
             <div className="section-label">
               <span>MAP LAYERS</span>
               <Layers size={14} />
@@ -849,21 +967,21 @@ export default function App() {
               ["Building footprints", buildings, setBuildings],
               ["Serving-cell links", links, setLinks],
             ].map(([label, value, setter]) => (
-              <label className="toggle-row" key={label as string}>
+              <div className="toggle-row" key={label as string}>
                 <span>{label as string}</span>
-                <input
-                  type="checkbox"
+                <Switch
+                  size="small"
+                  aria-label={label as string}
                   checked={value as boolean}
-                  onChange={(e) =>
+                  onChange={(checked) =>
                     (setter as React.Dispatch<React.SetStateAction<boolean>>)(
-                      e.target.checked,
+                      checked,
                     )
                   }
                 />
-                <span className="toggle" />
-              </label>
+              </div>
             ))}
-          </section>
+          </Card>
           <div className="sidebar-footer">
             <FlaskConical size={16} />
             <span>
@@ -871,14 +989,14 @@ export default function App() {
               <br />
               <strong>Every model has boundaries.</strong>
             </span>
-            <button
+            <ControlButton
               title="Read model limitations"
               onClick={() => setModelOpen(true)}
             >
               <Info size={16} />
-            </button>
+            </ControlButton>
           </div>
-        </aside>
+        </WorkspacePanel>
         <div className="center-panel">
           <div className="map-header">
             <div>
@@ -888,21 +1006,21 @@ export default function App() {
               <span className="map-subtitle">1.7 × 1.7 km study grid</span>
             </div>
             <div>
-              <button
+              <ControlButton
                 className={mode === "select" ? "active" : ""}
                 title="Select and drag entities"
                 onClick={() => setMode("select")}
               >
                 <MousePointer2 size={15} />
-              </button>
-              <button
+              </ControlButton>
+              <ControlButton
                 className={mode === "move" ? "active" : ""}
                 title="Move selected entity"
                 disabled={!entity}
                 onClick={() => setMode("move")}
               >
                 <Move size={15} />
-              </button>
+              </ControlButton>
             </div>
           </div>
           <NetworkMap
@@ -914,6 +1032,7 @@ export default function App() {
             buildings={buildings}
             links={links}
             onSelect={(id) => {
+              setInspectorOpen(true);
               setSelected(id);
               setMode("select");
             }}
@@ -933,22 +1052,22 @@ export default function App() {
                     : "READY"}
             </span>
             <div className="playback">
-              <button
+              <ControlButton
                 title="Reset simulation"
                 aria-label="Reset simulation"
                 disabled={pending}
                 onClick={() => apply({ ...scenario })}
               >
                 <RotateCcw size={15} />
-              </button>
-              <button
+              </ControlButton>
+              <ControlButton
                 title="Advance 10 milliseconds"
                 aria-label="Step simulation"
                 disabled={pending || !!error || !!completed}
                 onClick={() => command("step")}
               >
                 <SkipForward size={15} />
-              </button>
+              </ControlButton>
               <span className="sim-clock">
                 {((snapshot?.time_ms ?? 0) / 1000).toFixed(3)}
                 <small> s</small>
@@ -956,7 +1075,7 @@ export default function App() {
             </div>
             <label className="seed">
               SEED{" "}
-              <input
+              <Input
                 key={scenario.seed}
                 aria-label="Random seed"
                 type="number"
@@ -977,7 +1096,7 @@ export default function App() {
             </label>
             <label className="speed">
               Playback{" "}
-              <select
+              <SelectField
                 aria-label="Simulation speed"
                 value={speed}
                 onChange={(e) => {
@@ -995,7 +1114,7 @@ export default function App() {
                     {s}×
                   </option>
                 ))}
-              </select>
+              </SelectField>
             </label>
           </div>
           <section className="timeline">
@@ -1008,7 +1127,7 @@ export default function App() {
                 </span>
               </h2>
               <div className="timeline-filters">
-                <select
+                <SelectField
                   aria-label="Filter timeline by UE"
                   value={ueFilter}
                   onChange={(e) => setUeFilter(e.target.value)}
@@ -1019,7 +1138,7 @@ export default function App() {
                       {u.name}
                     </option>
                   ))}
-                </select>
+                </SelectField>
                 {[
                   "all",
                   "NAS",
@@ -1030,15 +1149,15 @@ export default function App() {
                   "RADIO",
                   "STATE",
                 ].map((f) => (
-                  <button
+                  <ControlButton
                     className={eventFilter === f ? "active" : ""}
                     key={f}
                     onClick={() => setEventFilter(f)}
                   >
                     {f === "all" ? "All events" : f}
-                  </button>
+                  </ControlButton>
                 ))}
-                <button
+                <ControlButton
                   title="Export event log"
                   aria-label="Export event log"
                   onClick={() =>
@@ -1046,22 +1165,25 @@ export default function App() {
                   }
                 >
                   <ArrowDownToLine size={14} />
-                </button>
+                </ControlButton>
               </div>
             </div>
             <div className="timeline-body">
               <div className="event-list">
                 {!events.length ? (
-                  <div className="empty-events">
-                    <span>
-                      <Radio size={23} />
-                    </span>
-                    <strong>Your network is ready to talk.</strong>
-                    <p>
-                      Run the simulation to inspect real NAS and NGAP messages.
-                    </p>
-                    <small>UE → gNodeB → AMF → gNodeB → UE</small>
-                  </div>
+                  <Empty
+                    className="empty-events"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={
+                      <>
+                        <strong>Your network is ready to talk.</strong>
+                        <p>
+                          Run the simulation to inspect real NAS and NGAP
+                          messages.
+                        </p>
+                      </>
+                    }
+                  />
                 ) : (
                   events.slice(-500).map((e) => (
                     <button
@@ -1090,7 +1212,11 @@ export default function App() {
             </div>
           </section>
         </div>
-        <aside className="right-panel">
+        <WorkspacePanel
+          side="right"
+          open={inspectorOpen}
+          onClose={() => setInspectorOpen(false)}
+        >
           <div className="inspector-title">
             <span>
               <Settings2 size={16} /> Entity inspector
@@ -1108,15 +1234,30 @@ export default function App() {
                     {gnodeb ? "NEXT GENERATION NODE B" : "USER EQUIPMENT"}
                   </span>
                   <h2>{entity.name}</h2>
-                  <span className="entity-state">
-                    <span className="live-dot" />
-                    {gnodeb
-                      ? (snapshot?.gnodebs[entity.id] ?? "Ready")
-                      : prettyState(ueStatus?.state)}
-                  </span>
+                  <Badge
+                    className="entity-state"
+                    status={
+                      gnodeb || ueStatus?.state === "Registered"
+                        ? "success"
+                        : [
+                              "RegistrationRejected",
+                              "NoCoverage",
+                              "RegistrationUnconfirmed",
+                            ].includes(ueStatus?.state ?? "")
+                          ? "error"
+                          : ueStatus?.state && ueStatus.state !== "Idle"
+                            ? "processing"
+                            : "default"
+                    }
+                    text={
+                      gnodeb
+                        ? (snapshot?.gnodebs[entity.id] ?? "Ready")
+                        : prettyState(ueStatus?.state)
+                    }
+                  />
                 </div>
               </div>
-              <section className="inspector-section">
+              <Card size="small" className="inspector-section">
                 <div className="section-label">
                   {gnodeb ? "RADIO CONFIGURATION" : "RADIO MEASUREMENT"}
                 </div>
@@ -1160,34 +1301,32 @@ export default function App() {
                       max={40}
                       onChange={(v) => updateRadio("gain_dbi", v)}
                     />
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={gnodeb.antenna?.sector ?? false}
-                        onChange={(e) =>
-                          apply({
-                            ...scenario,
-                            gnodebs: scenario.gnodebs.map((g) =>
-                              g.id === selected
-                                ? {
-                                    ...g,
-                                    antenna: {
-                                      sector: e.target.checked,
-                                      azimuth_deg: g.antenna?.azimuth_deg ?? 0,
-                                      downtilt_deg:
-                                        g.antenna?.downtilt_deg ?? 0,
-                                      resource_blocks:
-                                        g.antenna?.resource_blocks ?? 106,
-                                      numerology: g.antenna?.numerology ?? 1,
-                                    },
-                                  }
-                                : g,
-                            ),
-                          })
-                        }
-                      />{" "}
+                    <Checkbox
+                      checked={gnodeb.antenna?.sector ?? false}
+                      onChange={(e) =>
+                        apply({
+                          ...scenario,
+                          gnodebs: scenario.gnodebs.map((g) =>
+                            g.id === selected
+                              ? {
+                                  ...g,
+                                  antenna: {
+                                    sector: e.target.checked,
+                                    azimuth_deg: g.antenna?.azimuth_deg ?? 0,
+                                    downtilt_deg: g.antenna?.downtilt_deg ?? 0,
+                                    resource_blocks:
+                                      g.antenna?.resource_blocks ?? 106,
+                                    numerology: g.antenna?.numerology ?? 1,
+                                  },
+                                }
+                              : g,
+                          ),
+                        })
+                      }
+                    >
+                      {" "}
                       Sector antenna
-                    </label>
+                    </Checkbox>
                     {(
                       [
                         ["azimuth_deg", "Azimuth", 0, 360, 0],
@@ -1292,7 +1431,7 @@ export default function App() {
                       <span>Last echo RTT</span>
                       <strong>{session?.last_rtt_ms ?? "—"} ms virtual</strong>
                     </div>
-                    <button
+                    <ControlButton
                       disabled={
                         ueStatus?.state !== "Registered" ||
                         !!session?.active ||
@@ -1310,7 +1449,7 @@ export default function App() {
                       }}
                     >
                       Establish PDU session
-                    </button>
+                    </ControlButton>
                     {sessionPending && (
                       <p role="status">
                         Session signaling pending · virtual time
@@ -1327,7 +1466,7 @@ export default function App() {
                     )}
                     <label>
                       Echo loss (%)
-                      <input
+                      <Input
                         aria-label="Echo loss percent"
                         type="number"
                         min={0}
@@ -1340,7 +1479,7 @@ export default function App() {
                         }
                       />
                     </label>
-                    <button
+                    <ControlButton
                       disabled={!session?.active || sessionPending}
                       onClick={() => {
                         sessionAction("echo");
@@ -1348,8 +1487,8 @@ export default function App() {
                       }}
                     >
                       Send echo
-                    </button>
-                    <button
+                    </ControlButton>
+                    <ControlButton
                       disabled={!session?.active || sessionPending}
                       onClick={() => {
                         sessionAction("release");
@@ -1357,8 +1496,8 @@ export default function App() {
                       }}
                     >
                       Release session
-                    </button>
-                    <button
+                    </ControlButton>
+                    <ControlButton
                       disabled={
                         ueStatus?.state !== "Registered" ||
                         sessionPending ||
@@ -1367,8 +1506,8 @@ export default function App() {
                       onClick={() => sessionAction("deregister")}
                     >
                       Deregister UE
-                    </button>
-                    <button
+                    </ControlButton>
+                    <ControlButton
                       onClick={() =>
                         setMode(mode === "trajectory" ? "select" : "trajectory")
                       }
@@ -1376,12 +1515,12 @@ export default function App() {
                       {mode === "trajectory"
                         ? "Finish trajectory"
                         : "Draw trajectory"}
-                    </button>
+                    </ControlButton>
                     <fieldset className="session-fields">
                       <legend>Signaling laboratory (edits reset run)</legend>
                       <label>
                         Session hop delay (virtual ms)
-                        <input
+                        <Input
                           aria-label="Signaling delay"
                           type="number"
                           min={1}
@@ -1396,7 +1535,7 @@ export default function App() {
                       </label>
                       <label>
                         Drop message
-                        <select
+                        <SelectField
                           aria-label="Signaling loss"
                           value={signaling?.drop ?? "None"}
                           onChange={(e) =>
@@ -1419,11 +1558,11 @@ export default function App() {
                           ].map((v) => (
                             <option key={v}>{v}</option>
                           ))}
-                        </select>
+                        </SelectField>
                       </label>
                       <label>
                         Initial messages dropped
-                        <input
+                        <Input
                           aria-label="Signaling drop count"
                           type="number"
                           min={0}
@@ -1440,22 +1579,20 @@ export default function App() {
                           }}
                         />
                       </label>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={signaling?.reject_n2 ?? false}
-                          onChange={(e) =>
-                            changeSignaling({ reject_n2: e.target.checked })
-                          }
-                        />
+                      <Checkbox
+                        checked={signaling?.reject_n2 ?? false}
+                        onChange={(e) =>
+                          changeSignaling({ reject_n2: e.target.checked })
+                        }
+                      >
                         Reject N2 radio resources
-                      </label>
+                      </Checkbox>
                     </fieldset>
                     <fieldset className="session-fields">
                       <legend>Requested data service (edits reset run)</legend>
                       <label>
                         DNN
-                        <input
+                        <Input
                           aria-label="UE DNN"
                           key={`dnn-${ue?.id}-${ueRequest.dnn}`}
                           defaultValue={ueRequest.dnn}
@@ -1481,7 +1618,7 @@ export default function App() {
                       </label>
                       <label>
                         SST
-                        <input
+                        <Input
                           aria-label="UE SST"
                           type="number"
                           min={1}
@@ -1515,7 +1652,7 @@ export default function App() {
                       </label>
                       <label>
                         SD (6 hex digits, optional)
-                        <input
+                        <Input
                           aria-label="UE SD"
                           key={`sd-${ue?.id}-${ueRequest.snssai.sd}`}
                           defaultValue={
@@ -1568,7 +1705,7 @@ export default function App() {
                     </fieldset>
                     <label>
                       Speed (m/s)
-                      <input
+                      <Input
                         aria-label="UE velocity"
                         type="number"
                         min={0}
@@ -1601,7 +1738,7 @@ export default function App() {
                     </label>
                     <label>
                       Laboratory fault
-                      <select
+                      <SelectField
                         aria-label="Laboratory fault"
                         value={ue?.fault ?? "None"}
                         onChange={(e) =>
@@ -1628,7 +1765,7 @@ export default function App() {
                         ].map((f) => (
                           <option key={f}>{f}</option>
                         ))}
-                      </select>
+                      </SelectField>
                     </label>
                     <p className="hint">
                       SqnOutOfSync starts the synthetic USIM at SQN 100 and
@@ -1639,14 +1776,14 @@ export default function App() {
                     </p>
                   </>
                 )}
-              </section>
-              <section className="inspector-section">
+              </Card>
+              <Card size="small" className="inspector-section">
                 <div className="section-label">
                   POSITION <MapPin size={13} />
                 </div>
                 <label className="entity-name-field">
                   Entity name
-                  <input
+                  <Input
                     aria-label="Entity name"
                     key={`${entity.id}-${entity.name}`}
                     defaultValue={entity.name}
@@ -1669,7 +1806,7 @@ export default function App() {
                 <div className="coordinate-fields">
                   <label>
                     Latitude
-                    <input
+                    <Input
                       key={`${entity.id}-lat-${entity.lat}`}
                       type="number"
                       step="0.00001"
@@ -1689,7 +1826,7 @@ export default function App() {
                   </label>
                   <label>
                     Longitude
-                    <input
+                    <Input
                       key={`${entity.id}-lon-${entity.lon}`}
                       type="number"
                       step="0.00001"
@@ -1708,7 +1845,7 @@ export default function App() {
                     />
                   </label>
                 </div>
-                <button
+                <ControlButton
                   className="full-button"
                   onClick={() => setMode(mode === "move" ? "select" : "move")}
                 >
@@ -1716,9 +1853,9 @@ export default function App() {
                   {mode === "move"
                     ? "Click destination on map"
                     : "Reposition on map"}
-                </button>
-              </section>
-              <section className="inspector-section">
+                </ControlButton>
+              </Card>
+              <Card size="small" className="inspector-section">
                 <div className="section-label">
                   {gnodeb ? "CELL OVERVIEW" : "EXPERIMENT STATUS"}
                 </div>
@@ -1759,21 +1896,26 @@ export default function App() {
                     </span>
                   </div>
                 )}
-              </section>
-              <button
+              </Card>
+              <ControlButton
                 className="delete-entity"
                 onClick={remove}
                 disabled={pending}
               >
                 <Trash2 size={14} /> Delete {gnodeb ? "gNodeB" : "UE"}
-              </button>
+              </ControlButton>
             </>
           ) : (
-            <div className="inspector-empty">
-              <MousePointer2 size={28} />
-              <h2>Inspect your network</h2>
-              <p>Select a base station or UE on the map.</p>
-            </div>
+            <Empty
+              className="inspector-empty"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <>
+                  <h2>Inspect your network</h2>
+                  <p>Select a base station or UE on the map.</p>
+                </>
+              }
+            />
           )}
           <div className="network-summary">
             <span className="section-label">NETWORK SNAPSHOT</span>
@@ -1794,8 +1936,8 @@ export default function App() {
               </span>
             </div>
           </div>
-        </aside>
-      </main>
+        </WorkspacePanel>
+      </Layout.Content>
       <footer className="statusbar">
         <span>
           <span className="live-dot" /> Browser-native simulation{" "}
@@ -1804,9 +1946,9 @@ export default function App() {
         <span>
           OxiRush NAS + NGAP <span className="muted">/</span> Approximate RF{" "}
           <span className="muted">/</span>
-          <button onClick={() => setModelOpen(true)}>
+          <ControlButton onClick={() => setModelOpen(true)}>
             v1.0 candidate <Info size={11} />
-          </button>
+          </ControlButton>
         </span>
       </footer>
       {error && (
@@ -1814,9 +1956,11 @@ export default function App() {
           <ShieldAlert size={20} />
           <span>{error}</span>
           {snapshot && error.startsWith("Rust/WASM engine:") && (
-            <button onClick={() => setError("")}>Continue current run</button>
+            <ControlButton onClick={() => setError("")}>
+              Continue current run
+            </ControlButton>
           )}
-          <button
+          <ControlButton
             onClick={() => {
               setError("");
               setPending(true);
@@ -1824,402 +1968,375 @@ export default function App() {
             }}
           >
             Recover worker
-          </button>
-          <button onClick={() => apply(structuredClone(demo))}>
+          </ControlButton>
+          <ControlButton onClick={() => apply(structuredClone(demo))}>
             Reset to demo
-          </button>
+          </ControlButton>
         </div>
       )}
       {snapshot?.event_limit_reached && (
-        <div role="status" className="toast">
-          Trace limit reached (16,384 events). Reset before recording more
-          events; computation continues.
-        </div>
+        <Alert
+          role="status"
+          className="toast"
+          type="warning"
+          showIcon
+          title="Trace limit reached (16,384 events). Reset before recording more events; computation continues."
+        />
       )}
-      {policiesOpen && (
-        <div className="modal-scrim">
-          <section
-            className="model-modal session-policy-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Session policies"
-          >
-            <button
-              className="modal-close"
-              aria-label="Close policies"
-              onClick={() => setPoliciesOpen(false)}
-            >
-              <X size={18} />
-            </button>
-            <h2>Network session policies</h2>
-            {error && <p role="alert">{error}</p>}
-            <p>
-              Each row permits one DNN / S-NSSAI pair. Capacity counts active
-              sessions across UEs. Zero denies new sessions. Applying changes
-              resets execution.
-            </p>
-            <form
-              key={JSON.stringify(policies)}
-              onSubmit={(e) => {
-                e.preventDefault();
-                const data = new FormData(e.currentTarget);
-                const next: SessionPolicy[] = [];
-                for (let i = 0; i < 8; i++) {
-                  const dnn = String(data.get(`dnn-${i}`) ?? "").trim();
-                  if (!dnn) continue;
-                  const hex = String(data.get(`sd-${i}`) ?? "").trim();
-                  if (!/^(?:[0-9a-fA-F]{6})?$/.test(hex)) {
-                    setNotice("SD requires six hex digits or an empty value.");
-                    return;
-                  }
-                  next.push({
-                    request: {
-                      dnn,
-                      snssai: {
-                        sst: Number(data.get(`sst-${i}`)),
-                        sd: hex
-                          ? hex.match(/../g)!.map((h) => parseInt(h, 16))
-                          : null,
-                      },
-                    },
-                    max_sessions: Number(data.get(`capacity-${i}`)),
-                  });
-                }
-                apply({ ...scenario, session_policies: next });
-              }}
-            >
-              <table>
-                <thead>
-                  <tr>
-                    <th>DNN (blank removes)</th>
-                    <th>SST</th>
-                    <th>SD (hex)</th>
-                    <th>Capacity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from({ length: 8 }, (_, i) => (
-                    <tr key={i}>
-                      <td>
-                        <input
-                          aria-label={`Policy ${i + 1} DNN`}
-                          name={`dnn-${i}`}
-                          defaultValue={policies[i]?.request.dnn ?? ""}
-                          maxLength={99}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          aria-label={`Policy ${i + 1} SST`}
-                          name={`sst-${i}`}
-                          type="number"
-                          min={1}
-                          max={255}
-                          defaultValue={policies[i]?.request.snssai.sst ?? 1}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          aria-label={`Policy ${i + 1} SD`}
-                          name={`sd-${i}`}
-                          maxLength={6}
-                          defaultValue={
-                            policies[i]?.request.snssai.sd
-                              ?.map((n) => n.toString(16).padStart(2, "0"))
-                              .join("") ?? ""
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          aria-label={`Policy ${i + 1} capacity`}
-                          name={`capacity-${i}`}
-                          type="number"
-                          min={0}
-                          max={128}
-                          defaultValue={policies[i]?.max_sessions ?? 128}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button type="submit" disabled={pending}>
-                Apply policies
-              </button>
-            </form>
-          </section>
-        </div>
-      )}
-      {resultsOpen && (
-        <div className="modal-scrim" onClick={() => setResultsOpen(false)}>
-          <section
-            className="model-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Experiment results"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              aria-label="Close results"
-              className="modal-close"
-              onClick={() => setResultsOpen(false)}
-            >
-              <X />
-            </button>
-            <h2>Experiment results</h2>
-            <p>
-              {scenario.name} · Seed {scenario.seed} · RF {radio.model} ·{" "}
-              {(snapshot?.time_ms ?? 0) / 1000} s virtual time
-            </p>
-            <dl>
-              <dt>Registered / rejected / total UEs</dt>
-              <dd>
-                {registered} / {failed} / {scenario.ues.length}
-              </dd>
-              <dt>Registration success (all deployed UEs)</dt>
-              <dd>
-                {scenario.ues.length
-                  ? ((100 * latencies.length) / scenario.ues.length).toFixed(1)
-                  : "—"}
-                %
-              </dd>
-              <dt>Mean successful registration latency</dt>
-              <dd>{latency?.toFixed(1) ?? "—"} ms virtual</dd>
-              <dt>Active PDU sessions</dt>
-              <dd>{snapshot?.sessions.filter((s) => s.active).length ?? 0}</dd>
-              <dt>Echo delivered / dropped</dt>
-              <dd>
-                {snapshot?.sessions.reduce((n, s) => n + s.delivered, 0) ?? 0} /{" "}
-                {snapshot?.sessions.reduce((n, s) => n + s.dropped, 0) ?? 0}
-              </dd>
-            </dl>
-            <table>
-              <thead>
-                <tr>
-                  <th>Cell</th>
-                  <th>Associated UEs</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scenario.gnodebs.map((g) => (
-                  <tr key={g.id}>
-                    <td>{g.name}</td>
-                    <td>
-                      {snapshot?.ues.filter((u) => u.serving_cell === g.id)
-                        .length ?? 0}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p>
-              Protocol handovers: unsupported. SINR uses full-load co-channel
-              interference; RSRP is a power-allocation proxy. New runs use
-              configured virtual session delays; legacy recordings preserve
-              atomic session control. Deregistration remains atomic.
-            </p>
-            {baseline && (
-              <p>
-                Prior comparison: {baseline.registered} registered;{" "}
-                {baseline.latency?.toFixed(1) ?? "—"} ms mean registration
-                latency.
-              </p>
-            )}
-            <button onClick={() => setBaseline({ registered, latency })}>
-              Keep comparison
-            </button>
-            <p>
-              Experiment checkpoints include ordered commands and reconstruct
-              protocol state without storing keys. Export and save pause
-              playback.
-            </p>
-            <button
-              disabled={pending}
-              onClick={() =>
-                worker.current?.postMessage({
-                  type: "recording",
-                  purpose: "export",
-                  revision: activeRevision.current,
-                } satisfies WorkerCommand)
+      <ResearchModal
+        open={policiesOpen}
+        title="Session policies"
+        className="research-modal session-policy-modal"
+        width={800}
+        footer={null}
+        getContainer={false}
+        onCancel={() => setPoliciesOpen(false)}
+        closable={{ "aria-label": "Close policies" }}
+      >
+        <h2>Network session policies</h2>
+        {error && <p role="alert">{error}</p>}
+        <p>
+          Each row permits one DNN / S-NSSAI pair. Capacity counts active
+          sessions across UEs. Zero denies new sessions. Applying changes resets
+          execution.
+        </p>
+        <form
+          key={JSON.stringify(policies)}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            const next: SessionPolicy[] = [];
+            for (let i = 0; i < 8; i++) {
+              const dnn = String(data.get(`dnn-${i}`) ?? "").trim();
+              if (!dnn) continue;
+              const hex = String(data.get(`sd-${i}`) ?? "").trim();
+              if (!/^(?:[0-9a-fA-F]{6})?$/.test(hex)) {
+                setNotice("SD requires six hex digits or an empty value.");
+                return;
               }
-            >
-              Export experiment
-            </button>
-            <button
-              disabled={pending}
-              onClick={() =>
-                worker.current?.postMessage({
-                  type: "recording",
-                  purpose: "save",
-                  revision: activeRevision.current,
-                } satisfies WorkerCommand)
-              }
-            >
-              Save run
-            </button>
-            <button
-              onClick={() => {
-                void loadRun()
-                  .then((r) => {
-                    if (r) apply(r);
-                    else setNotice("No saved run checkpoint.");
-                  })
-                  .catch((e) => setNotice(String(e)));
-              }}
-            >
-              Restore saved run
-            </button>
-            <button
-              onClick={() => {
-                importPurpose.current = "compare";
-                file.current?.click();
-              }}
-            >
-              Compare experiment
-            </button>
-            {comparison && (
-              <table aria-label="Experiment comparison">
-                <caption>{comparison.name} vs current run</caption>
-                <thead>
-                  <tr>
-                    <th>Metric</th>
-                    <th>Imported run</th>
-                    <th>Current run</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Virtual time (ms)</td>
-                    <td>{comparison.snapshot.time_ms}</td>
-                    <td>{snapshot?.time_ms}</td>
-                  </tr>
-                  <tr>
-                    <td>Registered UEs</td>
-                    <td>
-                      {
-                        comparison.snapshot.ues.filter(
-                          (u) => u.state === "Registered",
-                        ).length
+              next.push({
+                request: {
+                  dnn,
+                  snssai: {
+                    sst: Number(data.get(`sst-${i}`)),
+                    sd: hex
+                      ? hex.match(/../g)!.map((h) => parseInt(h, 16))
+                      : null,
+                  },
+                },
+                max_sessions: Number(data.get(`capacity-${i}`)),
+              });
+            }
+            apply({ ...scenario, session_policies: next });
+          }}
+        >
+          <table>
+            <thead>
+              <tr>
+                <th>DNN (blank removes)</th>
+                <th>SST</th>
+                <th>SD (hex)</th>
+                <th>Capacity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 8 }, (_, i) => (
+                <tr key={i}>
+                  <td>
+                    <Input
+                      aria-label={`Policy ${i + 1} DNN`}
+                      name={`dnn-${i}`}
+                      defaultValue={policies[i]?.request.dnn ?? ""}
+                      maxLength={99}
+                    />
+                  </td>
+                  <td>
+                    <Input
+                      aria-label={`Policy ${i + 1} SST`}
+                      name={`sst-${i}`}
+                      type="number"
+                      min={1}
+                      max={255}
+                      defaultValue={policies[i]?.request.snssai.sst ?? 1}
+                    />
+                  </td>
+                  <td>
+                    <Input
+                      aria-label={`Policy ${i + 1} SD`}
+                      name={`sd-${i}`}
+                      maxLength={6}
+                      defaultValue={
+                        policies[i]?.request.snssai.sd
+                          ?.map((n) => n.toString(16).padStart(2, "0"))
+                          .join("") ?? ""
                       }
-                    </td>
-                    <td>{registered}</td>
-                  </tr>
-                  <tr>
-                    <td>Echo delivered</td>
-                    <td>
-                      {comparison.snapshot.sessions.reduce(
-                        (n, s) => n + s.delivered,
-                        0,
-                      )}
-                    </td>
-                    <td>
-                      {snapshot?.sessions.reduce((n, s) => n + s.delivered, 0)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Echo dropped</td>
-                    <td>
-                      {comparison.snapshot.sessions.reduce(
-                        (n, s) => n + s.dropped,
-                        0,
-                      )}
-                    </td>
-                    <td>
-                      {snapshot?.sessions.reduce((n, s) => n + s.dropped, 0)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-            <button onClick={metricsCSV}>Export metrics CSV</button>
-            <button
-              onClick={() =>
-                download("ranterra-results.json", { scenario, snapshot })
-              }
-            >
-              Export results JSON
-            </button>
-          </section>
+                    />
+                  </td>
+                  <td>
+                    <Input
+                      aria-label={`Policy ${i + 1} capacity`}
+                      name={`capacity-${i}`}
+                      type="number"
+                      min={0}
+                      max={128}
+                      defaultValue={policies[i]?.max_sessions ?? 128}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ControlButton type="submit" disabled={pending}>
+            Apply policies
+          </ControlButton>
+        </form>
+      </ResearchModal>
+      <ResearchModal
+        open={resultsOpen}
+        title="Experiment results"
+        className="research-modal results-modal"
+        width={920}
+        footer={null}
+        getContainer={false}
+        onCancel={() => setResultsOpen(false)}
+        closable={{ "aria-label": "Close results" }}
+      >
+        <p>
+          {scenario.name} · Seed {scenario.seed} · RF {radio.model} ·{" "}
+          {(snapshot?.time_ms ?? 0) / 1000} s virtual time
+        </p>
+        <div className="results-statistics">
+          <Statistic
+            title="Registered / rejected / deployed"
+            value={`${registered} / ${failed} / ${scenario.ues.length}`}
+          />
+          <Statistic
+            title="Registration success · all deployed UEs"
+            value={
+              scenario.ues.length
+                ? (100 * latencies.length) / scenario.ues.length
+                : 0
+            }
+            precision={1}
+            suffix="%"
+          />
+          <Statistic
+            title="Mean successful registration latency"
+            value={latency?.toFixed(1) ?? "—"}
+            suffix="ms virtual"
+          />
+          <Statistic
+            title="Active PDU sessions"
+            value={snapshot?.sessions.filter((s) => s.active).length ?? 0}
+          />
+          <Statistic
+            title="Echo delivered / dropped"
+            value={`${snapshot?.sessions.reduce((n, s) => n + s.delivered, 0) ?? 0} / ${snapshot?.sessions.reduce((n, s) => n + s.dropped, 0) ?? 0}`}
+          />
         </div>
-      )}
+        <Table
+          size="small"
+          pagination={false}
+          rowKey="id"
+          dataSource={scenario.gnodebs}
+          columns={[
+            { title: "Cell", dataIndex: "name" },
+            {
+              title: "Associated UEs",
+              render: (_, g) =>
+                snapshot?.ues.filter((u) => u.serving_cell === g.id).length ??
+                0,
+            },
+          ]}
+        />
+        <p>
+          Protocol handovers: unsupported. SINR uses full-load co-channel
+          interference; RSRP is a power-allocation proxy. New runs use
+          configured virtual session delays; legacy recordings preserve atomic
+          session control. Deregistration remains atomic.
+        </p>
+        {baseline && (
+          <p>
+            Prior comparison: {baseline.registered} registered;{" "}
+            {baseline.latency?.toFixed(1) ?? "—"} ms mean registration latency.
+          </p>
+        )}
+        <ControlButton onClick={() => setBaseline({ registered, latency })}>
+          Keep comparison
+        </ControlButton>
+        <p>
+          Experiment checkpoints include ordered commands and reconstruct
+          protocol state without storing keys. Export and save pause playback.
+        </p>
+        <ControlButton
+          disabled={pending}
+          onClick={() =>
+            worker.current?.postMessage({
+              type: "recording",
+              purpose: "export",
+              revision: activeRevision.current,
+            } satisfies WorkerCommand)
+          }
+        >
+          Export experiment
+        </ControlButton>
+        <ControlButton
+          disabled={pending}
+          onClick={() =>
+            worker.current?.postMessage({
+              type: "recording",
+              purpose: "save",
+              revision: activeRevision.current,
+            } satisfies WorkerCommand)
+          }
+        >
+          Save run
+        </ControlButton>
+        <ControlButton disabled={pending} onClick={() => void restoreRun()}>
+          Restore saved run
+        </ControlButton>
+        <ControlButton
+          onClick={() => {
+            importPurpose.current = "compare";
+            file.current?.click();
+          }}
+        >
+          Compare experiment
+        </ControlButton>
+        {comparison && (
+          <table aria-label="Experiment comparison">
+            <caption>{comparison.name} vs current run</caption>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Imported run</th>
+                <th>Current run</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Virtual time (ms)</td>
+                <td>{comparison.snapshot.time_ms}</td>
+                <td>{snapshot?.time_ms}</td>
+              </tr>
+              <tr>
+                <td>Registered UEs</td>
+                <td>
+                  {
+                    comparison.snapshot.ues.filter(
+                      (u) => u.state === "Registered",
+                    ).length
+                  }
+                </td>
+                <td>{registered}</td>
+              </tr>
+              <tr>
+                <td>Echo delivered</td>
+                <td>
+                  {comparison.snapshot.sessions.reduce(
+                    (n, s) => n + s.delivered,
+                    0,
+                  )}
+                </td>
+                <td>
+                  {snapshot?.sessions.reduce((n, s) => n + s.delivered, 0)}
+                </td>
+              </tr>
+              <tr>
+                <td>Echo dropped</td>
+                <td>
+                  {comparison.snapshot.sessions.reduce(
+                    (n, s) => n + s.dropped,
+                    0,
+                  )}
+                </td>
+                <td>{snapshot?.sessions.reduce((n, s) => n + s.dropped, 0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+        <ControlButton onClick={metricsCSV}>Export metrics CSV</ControlButton>
+        <ControlButton
+          onClick={() =>
+            download("ranterra-results.json", { scenario, snapshot })
+          }
+        >
+          Export results JSON
+        </ControlButton>
+      </ResearchModal>
       {notice && (
-        <div className="toast" role="status">
-          <Info size={17} />
-          <span>{notice}</span>
-          <button title="Dismiss notification" onClick={() => setNotice("")}>
-            <X size={15} />
-          </button>
-        </div>
+        <Alert
+          className="toast"
+          role="status"
+          showIcon
+          type="info"
+          title={notice}
+          closable={{ "aria-label": "Dismiss notification" }}
+          afterClose={() => setNotice("")}
+        />
       )}
-      {modelOpen && (
-        <div className="modal-scrim" onClick={() => setModelOpen(false)}>
-          <div
-            className="model-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Models and assumptions"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="modal-close"
-              aria-label="Close model information"
-              onClick={() => setModelOpen(false)}
-            >
-              <X size={20} />
-            </button>
-            <span className="eyebrow">KNOW YOUR MODEL</span>
-            <h2>A playground, with clear boundaries.</h2>
-            <p>
-              RANterra executes a deterministic Rust engine in a Web Worker. NAS
-              and NGAP messages are encoded and decoded by OxiRush, compiled to
-              WebAssembly.
-            </p>
-            <h3>Radio propagation</h3>
-            <code>
-              Selected model: {radio.model} · TR 38.901 v18.0.0 subset or legacy
-              log-distance
-              <br />
-              RSRP ≈ Ptx + gain − 10 log₁₀(12 × N_RB) − PL − antenna/shadow loss
-            </code>
-            <p>
-              UMi and UMa use LOS/NLOS path loss with 1.5 m UE height, 10–5000 m
-              horizontal distance and 0.5–100 GHz carrier. UMi requires 10 m
-              antennas, UMa 25 m. Outside that range the research model reports
-              no usable coverage. Shadow fading is seeded but not spatially
-              correlated. No terrain, diffraction, fast fading or PHY
-              scheduling.
-            </p>
-            <h3>Buildings are a coarse proxy</h3>
-            <p>
-              In UMi/UMa, footprint intersections select NLOS; missing geometry
-              assumes LOS. Legacy mode adds 12 dB per footprint, capped at 36
-              dB. Only closed simple ways are loaded, up to 600 buildings.
-              Heights, materials, holes and multipolygon relations are not
-              modeled. Missing buildings mean no obstruction loss.
-            </p>
-            <h3>Authenticated laboratory registration</h3>
-            <p>
-              Registration Request → 5G-AKA Authentication → Security Mode →
-              Registration Accept / Complete. Separate UE and AMF NAS security
-              contexts enforce NIA2 and NEA2. Public deterministic synthetic
-              credentials and null-scheme SUCI are for laboratory use only. RRC,
-              NG setup and native SCTP remain unsupported.
-            </p>
-            <h3>Local and reproducible</h3>
-            <p>
-              The seed controls virtual link delays (10–30 ms per hop). Editing
-              the scenario resets the experiment. Search, tiles and new OSM
-              geometry need internet; loaded geometry, protocol execution,
-              coverage and JSON exports work locally. 6G radio models and AI
-              controllers are extension points, not implemented features.
-            </p>
-            <button className="run-button" onClick={() => setModelOpen(false)}>
-              Back to the experiment <ChevronRight size={15} />
-            </button>
-          </div>
-        </div>
-      )}
+      <ResearchModal
+        open={modelOpen}
+        title="Models and assumptions"
+        className="research-modal"
+        width={720}
+        footer={null}
+        getContainer={false}
+        onCancel={() => setModelOpen(false)}
+        closable={{ "aria-label": "Close model information" }}
+      >
+        <span className="eyebrow">KNOW YOUR MODEL</span>
+        <h2>A playground, with clear boundaries.</h2>
+        <p>
+          RANterra executes a deterministic Rust engine in a Web Worker. NAS and
+          NGAP messages are encoded and decoded by OxiRush, compiled to
+          WebAssembly.
+        </p>
+        <h3>Radio propagation</h3>
+        <code>
+          Selected model: {radio.model} · TR 38.901 v18.0.0 subset or legacy
+          log-distance
+          <br />
+          RSRP ≈ Ptx + gain − 10 log₁₀(12 × N_RB) − PL − antenna/shadow loss
+        </code>
+        <p>
+          UMi and UMa use LOS/NLOS path loss with 1.5 m UE height, 10–5000 m
+          horizontal distance and 0.5–100 GHz carrier. UMi requires 10 m
+          antennas, UMa 25 m. Outside that range the research model reports no
+          usable coverage. Shadow fading is seeded but not spatially correlated.
+          No terrain, diffraction, fast fading or PHY scheduling.
+        </p>
+        <h3>Buildings are a coarse proxy</h3>
+        <p>
+          In UMi/UMa, footprint intersections select NLOS; missing geometry
+          assumes LOS. Legacy mode adds 12 dB per footprint, capped at 36 dB.
+          Only closed simple ways are loaded, up to 600 buildings. Heights,
+          materials, holes and multipolygon relations are not modeled. Missing
+          buildings mean no obstruction loss.
+        </p>
+        <h3>Authenticated laboratory registration</h3>
+        <p>
+          Registration Request → 5G-AKA Authentication → Security Mode →
+          Registration Accept / Complete. Separate UE and AMF NAS security
+          contexts enforce NIA2 and NEA2. Public deterministic synthetic
+          credentials and null-scheme SUCI are for laboratory use only. RRC, NG
+          setup and native SCTP remain unsupported.
+        </p>
+        <h3>Local and reproducible</h3>
+        <p>
+          The seed controls virtual link delays (10–30 ms per hop). Editing the
+          scenario resets the experiment. Search, tiles and new OSM geometry
+          need internet; loaded geometry, protocol execution, coverage and JSON
+          exports work locally. 6G radio models and AI controllers are extension
+          points, not implemented features.
+        </p>
+        <ControlButton
+          className="run-button"
+          onClick={() => setModelOpen(false)}
+        >
+          Back to the experiment <ChevronRight size={15} />
+        </ControlButton>
+      </ResearchModal>
       <input
         ref={file}
         type="file"
@@ -2227,7 +2344,7 @@ export default function App() {
         hidden
         onChange={importFile}
       />
-    </div>
+    </Layout>
   );
 }
 function RadioField({
@@ -2252,7 +2369,7 @@ function RadioField({
     <label className="radio-field">
       <span>{label}</span>
       <div>
-        <input
+        <Input
           aria-label={label}
           type="number"
           min={min}
@@ -2284,17 +2401,20 @@ function EventDetail({ event }: { event: NetworkEvent }) {
     <div className="event-detail">
       <div className="event-detail-heading">
         <span>DECODED PAYLOAD</span>
-        <button
+        <ControlButton
           title="Copy message bytes"
           onClick={() =>
-            void navigator.clipboard.writeText(event.hex).then(() => {
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1200);
-            })
+            void navigator.clipboard
+              .writeText(event.hex)
+              .then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1200);
+              })
+              .catch(() => setCopied(false))
           }
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
-        </button>
+        </ControlButton>
       </div>
       <strong>{event.kind}</strong>
       <p>{event.detail}</p>

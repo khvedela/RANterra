@@ -2,6 +2,10 @@
 
 Browser-native 5G research application: React/MapLibre/deck.gl with a browser-independent Rust engine running as WebAssembly in a Worker. Network emulation needs no backend. Geographic assets are optional external services.
 
+![Ant Design research workspace with registered UEs and virtual traffic](docs/preview.jpg)
+
+The workspace follows [Ant Design's visual language](https://ant.design/design.md), with a map, live network metrics, protocol inspection, entity controls, results dialogs and responsive inspectors. [Interface design and validation](docs/ui-design.md).
+
 **Current build: 1.0.0-rc.1. The requested production v1.0 release gates are not all satisfied.** See [release evidence and blockers](docs/V1_RELEASE_REPORT.md). This is a synthetic laboratory implementation of a documented subset, not a carrier core, certification of 3GPP compliance, or standardized 6G implementation.
 
 ## Run

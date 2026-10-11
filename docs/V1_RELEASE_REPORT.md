@@ -1,10 +1,20 @@
 # RANterra v1 release report
 
-**2026-10-11 — candidate 1.0.0-rc.1, target 1.0.0. Release acceptance: BLOCKED only on authorized hosted verification for the documented research scope.** Local validation and both remote CI jobs pass for candidate `57bb6aedaf3f8ea350af143b594db01651bbc4f0`. The candidate and corrective changes were committed and pushed with user authorization. Deployment and publication remain explicitly on hold while a free host is selected.
+**2026-10-11 — candidate 1.0.0-rc.1, target 1.0.0. Release acceptance: BLOCKED on authorized hosted verification and remote revalidation of the Ant Design upgrade.** The previous candidate passed both remote jobs; the redesigned candidate passes local checks described below. Deployment and publication remain explicitly on hold while a free host is selected.
+
+## Ant Design workspace upgrade
+
+The interface now uses Ant Design 6.6.5 following the requested design guidance: token-based neutral surfaces, system typography, accessible darker blue primary actions, consistent forms/buttons, cards, navigation, state badges, metric statistics, a per-cell results table, focus-safe dialogs and responsive setup/inspector drawers. The real MapLibre/deck.gl map, protocol inspector, scenario workflow and Rust/WASM engine remain connected. The [updated preview](preview.jpg) shows four authenticated UEs and a real established session/echo; geographic requests were disabled and loaded geometry was used.
+
+Validation found and fixed passive map annotations intercepting UE clicks, RF overlays tinting controls/markers, and checkpoint restore racing an export before its asynchronous IndexedDB read. Dialogs now complete the Ant close lifecycle to restore focus, with an explicit native Tab boundary guard. Small/short layouts retain the timeline and editing controls rather than clipping them. Automated accessibility checks have no serious/critical findings for the tested WCAG A/AA rules; this is not a full accessibility certification.
+
+Evidence for this UI change: the **24-test production browser baseline passed**, then the expanded **30 checks passed in 2.3 minutes** (15 Chromium, 15 Firefox, including 390×844 responsive editing, focus/Escape/return and axe workspace/results scans). `npm test` passed **66 Rust tests**, actual WASM, production worker and native↔WASM replay; provider-input tests, ESLint, TypeScript, full Rust/WASM production build and npm audit passed. All **12 production artifact hashes** matched between the web build and the full Rust/WASM build. Platform fonts remove the 26 former font artifacts. **492 dependency licenses** are reviewed; unmodified MPL-2.0 axe packages are permitted only as development validators, with obligations documented in [UI design](ui-design.md). Runtime Ant dependencies remain within the permissive license policy.
+
+The remote evidence in the next section predates this interface upgrade. A new candidate CI run must verify the committed UI before that evidence is treated as current. No deployment or publication is performed.
 
 ## Remote CI result and hosting decision
 
-[GitHub Actions run 38148564181](https://github.com/khvedela/RANterra/actions/runs/38148564181) completed successfully on Ubuntu 24.04.5: **66 Rust tests, 13 independent peers, 30 codec fixtures, 24 Chromium/Firefox tests**, real WASM/worker/replay, lint, audits/licenses, KDF fixtures, benchmarks and **38 matching artifact hashes**. The sanitizer job completed **216,847 executions in 61 seconds**. The [candidate build artifact](https://github.com/khvedela/RANterra/actions/runs/38148564181/artifacts/11706467440) was downloaded and all 38 file hashes independently matched its manifest. The zip digest reported by GitHub is `sha256:e8948f0746d33fc47b8a6848f521a930c2fa159b44cfcb40200f71a08b3e07b9`. This report update changes documentation only; the linked SHA identifies the tested application and workflow.
+[GitHub Actions run 38148564181](https://github.com/khvedela/RANterra/actions/runs/38148564181) completed successfully on Ubuntu 24.04.5: **66 Rust tests, 13 independent peers, 30 codec fixtures, 24 Chromium/Firefox tests**, real WASM/worker/replay, lint, audits/licenses, KDF fixtures, benchmarks and **38 matching artifact hashes**. The sanitizer job completed **216,847 executions in 61 seconds**. The [candidate build artifact](https://github.com/khvedela/RANterra/actions/runs/38148564181/artifacts/11706467440) was downloaded and all 38 file hashes independently matched its manifest. The zip digest reported by GitHub is `sha256:e8948f0746d33fc47b8a6848f521a930c2fa159b44cfcb40200f71a08b3e07b9`. The linked SHA identifies the previously tested application and workflow; the UI follow-up is separately identified above.
 
 The first candidate run (`9085333`, [failed run](https://github.com/khvedela/RANterra/actions/runs/38147397454)) passed Chromium but failed all Firefox startup assertions. CI now supplies an Xvfb display and records a graphics preflight: both headless and headed Firefox obtained WebGL2 with llvmpipe under that display. The full suite runs headed under Xvfb and passes. The original run did not retain page traces, so the precise original graphics failure is inferred from the environment change rather than recovered from a trace. Failure screenshots/traces are now retained. Map initialization exceptions now produce a visible warning while preserving simulation/export controls, with an explicit no-WebGL regression test. Timeouts and the normal real-map/protocol assertions were not weakened.
 
@@ -62,27 +72,27 @@ Examples: [minimal](../examples/minimal.json), [AUTS recovery](../examples/auts-
 
 The original MVP baseline passed 14 native tests and actual WASM/worker checks before the initial upgrade. The prior suite was run again before this follow-up. These are the latest local results, not inferred CI results:
 
-| Check | Observed result |
-|---|---|
-| Native Rust | **66 passed**: 35 unit, 10 experiment, 2 RF, 4 reliability, 3 crypto, 7 signaling, 5 SMF |
-| Independent Go/free5GC peer | **13 passed**, plus six AUTS negative subcases; both registration roles, shared SMF, timers and failed N2 |
-| Independent codec round trips | **30 byte-exact NAS/NGAP fixtures** |
-| Production Chromium/Firefox | **24 passed locally and remotely**, 12 per browser |
-| Actual WASM, production worker, native↔WASM replay | Passed, including AUTS, session traffic/cleanup, ordering, offline computation, checkpoint continuation and stale-command isolation |
-| Native deterministic mutations | 12,000 inputs / **144,000 parser/authentication calls**; 254 allocation/release cycles; queue saturation and malformed transport |
-| Coverage-guided native fuzzing | **837,065 executions / 301 seconds**, no crash or sanitizer finding; seed 501, nightly-2026-07-20, 38,113 coverage edges (not a coverage percentage) |
-| Real-WASM extended soak | **16,384 cycles / 327,680 echo requests**, 103,438.37 ms wall time; 2,097,152-byte maximum linear memory; **zero growth after 32 warm-up cycles** |
-| Clean source-copy install/build/test | Passed without copied node_modules, dist, target or generated WASM; Node 24.18.0 / Rust 1.97.1 |
-| TypeScript, Vite, ESLint, rustfmt, Clippy `-D warnings` | Passed |
-| Independent Python KDF fixtures | Regenerated and byte-compared successfully |
-| Build reproducibility/artifact verification | Two consecutive builds match **38 artifact hashes**; WASM magic and forbidden source artifacts checked |
-| npm audit | **0 known vulnerabilities** |
-| Rust main/fuzz audits | No vulnerability findings; visible unmaintained `paste` warning RUSTSEC-2024-0436 |
-| Go validation audit | Explicit isolated-tool exception GO-2022-1083; no additional reachable finding |
-| Licenses | **426 locked packages**, plus nine standalone Go dependencies with retained notices; no AGPL integrated |
-| Internal ASVS Level 1 review | 70 decisions/evidence references; **4 pending host requirements**; not certification |
-| Remote candidate CI | **PASS** at `57bb6ae`; [both jobs](https://github.com/khvedela/RANterra/actions/runs/38148564181) |
-| Hosted deployment | **Not authorized or verified** |
+| Check                                                   | Observed result                                                                                                                                      |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native Rust                                             | **66 passed**: 35 unit, 10 experiment, 2 RF, 4 reliability, 3 crypto, 7 signaling, 5 SMF                                                             |
+| Independent Go/free5GC peer                             | **13 passed**, plus six AUTS negative subcases; both registration roles, shared SMF, timers and failed N2                                            |
+| Independent codec round trips                           | **30 byte-exact NAS/NGAP fixtures**                                                                                                                  |
+| Production Chromium/Firefox                             | **30 passed locally** for the Ant upgrade; prior CI passed 24; remote revalidation pending                                                           |
+| Actual WASM, production worker, native↔WASM replay      | Passed, including AUTS, session traffic/cleanup, ordering, offline computation, checkpoint continuation and stale-command isolation                  |
+| Native deterministic mutations                          | 12,000 inputs / **144,000 parser/authentication calls**; 254 allocation/release cycles; queue saturation and malformed transport                     |
+| Coverage-guided native fuzzing                          | **837,065 executions / 301 seconds**, no crash or sanitizer finding; seed 501, nightly-2026-07-20, 38,113 coverage edges (not a coverage percentage) |
+| Real-WASM extended soak                                 | **16,384 cycles / 327,680 echo requests**, 103,438.37 ms wall time; 2,097,152-byte maximum linear memory; **zero growth after 32 warm-up cycles**    |
+| Clean source-copy install/build/test                    | Passed without copied node_modules, dist, target or generated WASM; Node 24.18.0 / Rust 1.97.1                                                       |
+| TypeScript, Vite, ESLint, rustfmt, Clippy `-D warnings` | Passed                                                                                                                                               |
+| Independent Python KDF fixtures                         | Regenerated and byte-compared successfully                                                                                                           |
+| Build reproducibility/artifact verification             | Current builds match **12 artifact hashes**; WASM magic and forbidden source artifacts checked; previous font-bearing build had 38                   |
+| npm audit                                               | **0 known vulnerabilities**                                                                                                                          |
+| Rust main/fuzz audits                                   | No vulnerability findings; visible unmaintained `paste` warning RUSTSEC-2024-0436                                                                    |
+| Go validation audit                                     | Explicit isolated-tool exception GO-2022-1083; no additional reachable finding                                                                       |
+| Licenses                                                | **492 locked packages**, plus nine standalone Go dependencies with retained notices; no AGPL integrated                                              |
+| Internal ASVS Level 1 review                            | 70 decisions/evidence references; **4 pending host requirements**; not certification                                                                 |
+| Remote candidate CI                                     | Previous candidate passed [both jobs](https://github.com/khvedela/RANterra/actions/runs/38148564181); Ant upgrade revalidation pending               |
+| Hosted deployment                                       | **Not authorized or verified**                                                                                                                       |
 
 Initial browser runs exposed real import/checkbox timing problems and outdated expectations, which were fixed. A run during heavy compilation also hit three Chromium boot timeouts; the subsequent full run passed without increasing the timeout. Successful final runs do not erase those earlier failures. Storage errors are injected, not a claim of exhausting real disk quota. The five-minute fuzzer and 103-second extended soak are finite campaigns, not day-long reliability certification. Fuzz tooling is isolated from browser assets; six permissively licensed tooling dependencies and their NCSA obligation were reviewed.
 
@@ -102,14 +112,14 @@ TR 38.901 **18.0.0**, Table 7.4.1-1 UMi/UMa subset. At 100 m horizontal distance
 
 Apple M3 Pro, macOS arm64; 10 runs, **16 gNodeBs / 128 UEs / 467 buildings / 1,225 grid samples**, UMa. Timings are **wall-clock**, not simulated latency:
 
-| Metric | Native release, Rust 1.97.1 | WASM, Node 24.18.0 |
-|---|---:|---:|
-| RF/engine initialization median | 22.45 ms | 46.03 ms |
-| RF/engine initialization maximum | 25.14 ms | 77.29 ms |
-| 1,000 virtual-ms registration advance median | 13.31 ms | 19.32 ms |
-| Native peak RSS / sampled Node RSS | 10,174,464 bytes | 510,263,296 bytes |
-| WASM linear memory | — | 6,488,064 bytes |
-| Serialized snapshot | 1,038,551 bytes | 1,038,013 bytes |
+| Metric                                       | Native release, Rust 1.97.1 | WASM, Node 24.18.0 |
+| -------------------------------------------- | --------------------------: | -----------------: |
+| RF/engine initialization median              |                    22.45 ms |           46.03 ms |
+| RF/engine initialization maximum             |                    25.14 ms |           77.29 ms |
+| 1,000 virtual-ms registration advance median |                    13.31 ms |           19.32 ms |
+| Native peak RSS / sampled Node RSS           |            10,174,464 bytes |  510,263,296 bytes |
+| WASM linear memory                           |                           — |    6,488,064 bytes |
+| Serialized snapshot                          |             1,038,551 bytes |    1,038,013 bytes |
 
 Worker reload (validation + RF + serialization + transfer) measured **49.07 ms median / 53.90 ms maximum**; sampled whole-process RSS **569,049,088 bytes**. Native RSS measures the already-built executable, excluding compilation. Node RSS includes host/JIT allocations and is not browser peak memory. The extended soak separately sampled RSS at 49,872,896 bytes; cross-process RSS differences are not a leak trend. Browser painting latency and peak tab memory remain unmeasured.
 
@@ -119,16 +129,16 @@ The Linux CI runner separately measured native initialization median/max **40.28
 
 ## Release gates and remaining limitations
 
-| Gate | Status |
-|---|---|
-| Clean local static boot, real browser WASM, concurrent authenticated registration and enforced NAS security | PASS for documented laboratory subset |
-| PDU session establishment, encoded N2, virtual packets, failure/teardown and protocol inspection | PASS for one-session IPv4 subset |
-| Movement affects radio/state; equations validated and limitations documented | PASS for specified models and reassociation |
-| Save/restore/import/export/replay and transactional invalid-input handling | PASS for bounded supported actions/profiles |
-| Local automated validation and applicable local security checks | PASS within the explicit test/assessment scope |
-| Green remote CI for the candidate application/workflow | **PASS** at `57bb6ae`; report follow-up changes documentation only |
-| Authorized production HTTPS deployment/provider verification | OPEN — no deployment authorized/performed |
-| Stable v1.0 release eligibility | **FAIL / BLOCKED until hosted verification passes** |
+| Gate                                                                                                        | Status                                                                                              |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Clean local static boot, real browser WASM, concurrent authenticated registration and enforced NAS security | PASS for documented laboratory subset                                                               |
+| PDU session establishment, encoded N2, virtual packets, failure/teardown and protocol inspection            | PASS for one-session IPv4 subset                                                                    |
+| Movement affects radio/state; equations validated and limitations documented                                | PASS for specified models and reassociation                                                         |
+| Save/restore/import/export/replay and transactional invalid-input handling                                  | PASS for bounded supported actions/profiles                                                         |
+| Local automated validation and applicable local security checks                                             | PASS within the explicit test/assessment scope                                                      |
+| Green remote CI for the candidate application/workflow                                                      | **PENDING** remote revalidation of the Ant Design candidate; previous candidate passed at `57bb6ae` |
+| Authorized production HTTPS deployment/provider verification                                                | OPEN — no deployment authorized/performed                                                           |
+| Stable v1.0 release eligibility                                                                             | **FAIL / BLOCKED until current CI and hosted verification pass**                                    |
 
 Deliberate limitations remain visible: no production subscriber credentials; no RRC/AS security/PHY/NG setup/SCTP/internet forwarding/SBI/PFCP; one IPv4 session per UE, fixed QFI/5QI and no throughput enforcement; limited timer/failure variants; no protocol handover or automatic mobility reconnection; no RSRQ, terrain or height/material-aware RF; no WebKit/mobile certification, field calibration or measured browser-paint/peak-memory budget; bounded histories/journals and pool exhaustion after 254 allocations until reset; synchronous bounded replay/grid computation in a worker; advisory extension traits and no-op controller rather than a trained policy. Large geography bundle warnings remain.
 
